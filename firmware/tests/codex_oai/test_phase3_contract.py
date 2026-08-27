@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -13,6 +15,7 @@ REPO = HERE.parents[2]
 EMULATOR = REPO / "firmware" / "tests" / "emulator"
 PACKAGE = EMULATOR / "package.json"
 BOOTROM_SCRIPT = EMULATOR / "get-bootrom.sh"
+RELEASE_MANIFEST_CHECK = REPO / "manifest_selfverify.py"
 EVIDENCE = REPO / "firmware" / "evidence" / "codex-oai-emulator.json"
 VIAL_EVIDENCE = REPO / "firmware" / "evidence" / "vial-oai-emulator.json"
 EVIDENCE_README = REPO / "firmware" / "evidence" / "README.md"
@@ -27,6 +30,16 @@ BOOTROM_SHA256 = "99f8a1f813ce3aa9415884de3fb6c5b962d3c6fa0394b05413ad3c7b3c39ec
 
 
 class Phase3ReleaseContractTest(unittest.TestCase):
+    def test_release_manifest_self_verifies(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-B", str(RELEASE_MANIFEST_CHECK)],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_npm_ci_declares_the_bootrom_postinstall(self) -> None:
         package = json.loads(PACKAGE.read_text(encoding="utf-8"))
         self.assertEqual(package["scripts"].get("postinstall"), "./get-bootrom.sh")

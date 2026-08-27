@@ -23,7 +23,7 @@
         {"name": "OAI_ACT10", "title": "Codex OAI: accept", "shortName": "ACT10"},
         {"name": "OAI_ACT11", "title": "Codex OAI: microphone", "shortName": "ACT11"},
         {"name": "OAI_ACT12", "title": "Codex OAI: send", "shortName": "ACT12"},
-        {"name": "OAI_MICROPHONE", "title": "Codex OAI: microphone alias", "shortName": "OAI MIC"},
+        {"name": "OAI_MICROPHONE", "title": "Codex OAI: legacy ACCEPT alias", "shortName": "LEGACY ACCEPT"},
         {"name": "OAI_ENC", "title": "Codex OAI: encoder press", "shortName": "OAI ENC"},
         {"name": "OAI_ENC_CW", "title": "Codex OAI: encoder clockwise", "shortName": "ENC CW"},
         {"name": "OAI_ENC_CCW", "title": "Codex OAI: encoder counter-clockwise", "shortName": "ENC CCW"},

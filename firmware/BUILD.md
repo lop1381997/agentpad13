@@ -31,7 +31,7 @@ are in `hardware/pcb/README.md` and `release/RELEASE.md` row M.
 | macOS | 15 (Darwin 25.4, arm64) | |
 | QMK CLI | 1.2.0 | `pip install --user qmk` |
 | Python | 3.12 | |
-| vial-qmk | branch `vial`, commit `00fc4627` | + 1 small core patch, see §2 |
+| vial-qmk | branch `vial`, commit `00fc4627` | + 2 small core patches, see §2 |
 | arm-none-eabi-gcc | **Arm GNU Toolchain 15.2.Rel1** (gcc 15.2.1) | official Arm build, self-contained (bundles newlib) |
 
 ### 1.1 Toolchain install — and the blocker we hit
@@ -77,16 +77,19 @@ qmk config user.qmk_home="$PWD"
 qmk git-submodule       # chibios, chibios-contrib, pico-sdk, printf, lufa, ...
                         # (lufa IS required: ChibiOS USB descriptors use its headers)
 
-# Apply the one core patch (see §6 for what it does and why):
+# Apply the two core patches (see §6 for what they do and why):
 git apply /path/to/agentpad13/firmware/patches/0001-via-command-kb-backport.patch
+git apply /path/to/agentpad13/firmware/patches/0002-raw-hid-report-id-chibios.patch
 
 # Drop our keyboard tree in:
 cp -R /path/to/agentpad13/firmware/loudest_micro keyboards/loudest_micro
 ```
 
-> **Do not skip the patch.** Without it the vial build still compiles, but
-> VIA silently swallows the agent-status protocol (IDs 0x01–0x04). The
-> checker below fails loudly on an unpatched tree.
+> **Do not skip either patch.** `0001` prevents VIA from swallowing the
+> keyboard status protocol; `0002` is required by `codex_oai` to expose its
+> locked Report-ID-6 Direct endpoint. `0002` is inert for `vial_oai`, which
+> uses Vial's report-ID-less endpoint. The repository builder applies and
+> verifies both patches automatically.
 
 ## 3. Build
 
