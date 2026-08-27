@@ -11,14 +11,23 @@
 #include "codex_rgb_cap.h"
 
 #ifndef CODEX_EXTRA_LAYERS
-#    define CODEX_EXTRA_LAYERS 2
+#    if defined(CODEX_OAI_VIAL)
+#        define CODEX_EXTRA_LAYERS 6
+#    else
+#        define CODEX_EXTRA_LAYERS 2
+#    endif
 #endif
 
-/* Add user layers by increasing CODEX_EXTRA_LAYERS, adding their LAYOUT rows
- * below, and appending them to codex_layer_order. Two extension layers are
- * shipped; a third transparent custom layer remains available at build time. */
-#if CODEX_EXTRA_LAYERS > 3
-#    error "CODEX_EXTRA_LAYERS is limited to the three declared extension layers"
+/* The Direct OAI target keeps its existing four-layer default.  Vial-OAI
+ * always compiles the eight defaults Vial copies into its dynamic keymap. */
+#if defined(CODEX_OAI_VIAL)
+#    if CODEX_EXTRA_LAYERS != 6
+#        error "CODEX_OAI_VIAL requires exactly eight layers"
+#    endif
+#else
+#    if CODEX_EXTRA_LAYERS > 3
+#        error "CODEX_EXTRA_LAYERS is limited to the three declared extension layers"
+#    endif
 #endif
 #define CODEX_LAYER_COUNT (2 + CODEX_EXTRA_LAYERS)
 
@@ -28,6 +37,9 @@ enum codex_layers {
     L_USER2,
     L_USER3,
     L_USER4,
+    L_USER5,
+    L_USER6,
+    L_USER7,
 };
 
 #define CODEX_OAI_LAYER L_CODEX
@@ -51,6 +63,8 @@ enum codex_oai_keycodes {
     OAI_ACT12,
     OAI_MICROPHONE,
     OAI_ENC,
+    OAI_ENC_CW,
+    OAI_ENC_CCW,
     CODEX_TOUCH_LAYER,
 };
 
@@ -112,14 +126,58 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 #endif
 #if CODEX_EXTRA_LAYERS > 2
     [L_USER4] = LAYOUT(
+#if defined(CODEX_OAI_VIAL)
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS,           OAI_ENC, CODEX_TOUCH_LAYER
+#else
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, TP_TOG,
+        KC_TRNS,           OAI_ENC, CODEX_TOUCH_LAYER
+#endif
+    ),
+#endif
+#if CODEX_EXTRA_LAYERS > 3
+    [L_USER5] = LAYOUT(
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS,           OAI_ENC, CODEX_TOUCH_LAYER
+    ),
+#endif
+#if CODEX_EXTRA_LAYERS > 4
+    [L_USER6] = LAYOUT(
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS,           OAI_ENC, CODEX_TOUCH_LAYER
+    ),
+#endif
+#if CODEX_EXTRA_LAYERS > 5
+    [L_USER7] = LAYOUT(
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS,           OAI_ENC, CODEX_TOUCH_LAYER
     ),
 #endif
 };
 /* clang-format on */
+
+#if defined(CODEX_OAI_VIAL) && defined(ENCODER_MAP_ENABLE)
+const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
+    [L_CODEX] = { ENCODER_CCW_CW(OAI_ENC_CCW, OAI_ENC_CW) },
+    [L_FN]    = { ENCODER_CCW_CW(KC_WH_U, KC_WH_D) },
+    [L_USER2] = { ENCODER_CCW_CW(KC_PGUP, KC_PGDN) },
+    [L_USER3] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
+    [L_USER4] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
+    [L_USER5] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
+    [L_USER6] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
+    [L_USER7] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
+};
+#endif
 
 static const uint8_t codex_layer_order[CODEX_LAYER_COUNT] = {
     L_CODEX,
@@ -132,6 +190,15 @@ static const uint8_t codex_layer_order[CODEX_LAYER_COUNT] = {
 #endif
 #if CODEX_EXTRA_LAYERS > 2
     L_USER4,
+#endif
+#if CODEX_EXTRA_LAYERS > 3
+    L_USER5,
+#endif
+#if CODEX_EXTRA_LAYERS > 4
+    L_USER6,
+#endif
+#if CODEX_EXTRA_LAYERS > 5
+    L_USER7,
 #endif
 };
 
@@ -454,6 +521,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
 }
 
+#if !defined(CODEX_OAI_VIAL)
 CODEX_OAI_KEEP bool encoder_update_user(uint8_t index, bool clockwise) {
     if (index != 0U) {
         return false;
@@ -478,6 +546,7 @@ CODEX_OAI_KEEP bool encoder_update_user(uint8_t index, bool clockwise) {
     }
     return false;
 }
+#endif
 
 void housekeeping_task_user(void) {
     uint32_t now_ms = timer_read32();

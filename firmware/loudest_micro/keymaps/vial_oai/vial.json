@@ -1,0 +1,41 @@
+{
+    "name": "AgentPad13 OAI + Vial",
+    "vendorId": "0xFEED",
+    "productId": "0x4C4D",
+    "lighting": "vialrgb",
+    "matrix": {
+        "rows": 4,
+        "cols": 4
+    },
+    "customKeycodes": [
+        {"name": "JS_MODE", "title": "Cycle joystick mode: gamepad / arrows (8-way) / scroll", "shortName": "JSMODE"},
+        {"name": "TP_TOG", "title": "Enable/disable the touch key", "shortName": "TPTOG"},
+        {"name": "OAI_AG00", "title": "Codex OAI: previous agent", "shortName": "AG00"},
+        {"name": "OAI_AG01", "title": "Codex OAI: next agent", "shortName": "AG01"},
+        {"name": "OAI_AG02", "title": "Codex OAI: new", "shortName": "AG02"},
+        {"name": "OAI_AG03", "title": "Codex OAI: review", "shortName": "AG03"},
+        {"name": "OAI_AG04", "title": "Codex OAI: plan", "shortName": "AG04"},
+        {"name": "OAI_AG05", "title": "Codex OAI: implement", "shortName": "AG05"},
+        {"name": "OAI_ACT06", "title": "Codex OAI: refactor", "shortName": "ACT06"},
+        {"name": "OAI_ACT07", "title": "Codex OAI: test", "shortName": "ACT07"},
+        {"name": "OAI_ACT08", "title": "Codex OAI: abort", "shortName": "ACT08"},
+        {"name": "OAI_ACT09", "title": "Codex OAI: safe", "shortName": "ACT09"},
+        {"name": "OAI_ACT10", "title": "Codex OAI: accept", "shortName": "ACT10"},
+        {"name": "OAI_ACT11", "title": "Codex OAI: microphone", "shortName": "ACT11"},
+        {"name": "OAI_ACT12", "title": "Codex OAI: send", "shortName": "ACT12"},
+        {"name": "OAI_MICROPHONE", "title": "Codex OAI: microphone alias", "shortName": "OAI MIC"},
+        {"name": "OAI_ENC", "title": "Codex OAI: encoder press", "shortName": "OAI ENC"},
+        {"name": "OAI_ENC_CW", "title": "Codex OAI: encoder clockwise", "shortName": "ENC CW"},
+        {"name": "OAI_ENC_CCW", "title": "Codex OAI: encoder counter-clockwise", "shortName": "ENC CCW"},
+        {"name": "CODEX_TOUCH_LAYER", "title": "Cycle the active AgentPad13 layer", "shortName": "LAYER"}
+    ],
+    "layouts": {
+        "keymap": [
+            ["0,0", "0,1", "0,2", "0,3"],
+            ["1,0", "1,1", "1,2", "1,3"],
+            ["2,0", "2,1", "2,2", "2,3"],
+            ["3,2", {"w": 2}, "3,0", {"x": 0.5}, "3,1"],
+            [{"x": 3.5}, "0,0\n\n\n\n\n\n\n\n\ne", "0,1\n\n\n\n\n\n\n\n\ne"]
+        ]
+    }
+}
