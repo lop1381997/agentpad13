@@ -91,6 +91,15 @@ class ArtifactVerifierTest(unittest.TestCase):
             "uf2_sha256": hashlib.sha256(uf2_bytes).hexdigest(),
             "uf2_size_bytes": len(uf2_bytes),
         }
+        self.good_vial_evidence = {
+            **self.good_evidence,
+            "vid_pid": "feed:4c4d",
+            "usage": "ff60:0061",
+            "report_id": None,
+            "report_bytes": 32,
+            "vial_protocol_ack": True,
+            "vial_default_k00": 0x7E02,
+        }
         self.verifier = load_verifier()
 
     def tearDown(self) -> None:
@@ -100,7 +109,15 @@ class ArtifactVerifierTest(unittest.TestCase):
         if command[0].endswith("-size"):
             return "   text    data     bss     dec     hex filename\n   1000      20      30    1050     41a fixture.elf\n"
         if command[0].endswith("-nm"):
-            return "00000000 T raw_hid_receive\n00000000 T codex_oai_notify\n00000000 T codex_led_render\n00000000 T encoder_update_user\n"
+            return (
+                "00000000 T raw_hid_receive\n"
+                "00000000 T codex_oai_notify\n"
+                "00000000 T codex_led_render\n"
+                "00000000 T encoder_update_user\n"
+                "00000000 T via_command_kb\n"
+                "00000000 T codex_oai_vial_command\n"
+                "00000000 T process_record_user\n"
+            )
         raise AssertionError(f"unexpected tool command: {command}")
 
     def _verify(
@@ -110,6 +127,7 @@ class ArtifactVerifierTest(unittest.TestCase):
         elf: Path | None = None,
         evidence: dict | None = None,
         elf_binary: bytes | None = None,
+        profile: str = "direct",
     ):
         with mock.patch.object(
             self.verifier.subprocess, "check_output", side_effect=self._tool_output
@@ -123,6 +141,7 @@ class ArtifactVerifierTest(unittest.TestCase):
                 uf2 or self.good_uf2,
                 elf or self.good_elf,
                 evidence or self.good_evidence,
+                profile=profile,
             )
 
     def _evidence_for(self, uf2: Path) -> dict:
@@ -152,6 +171,21 @@ class ArtifactVerifierTest(unittest.TestCase):
                 "trailing_zero_padding_bytes": len(self.uf2_image) - len(self.elf_binary),
             },
         )
+
+    def test_accepts_vial_oai_profile_with_standard_raw_hid_transport(self) -> None:
+        result = self._verify(evidence=self.good_vial_evidence, profile="vial")
+
+        self.assertEqual(result["target"], "loudest_micro:vial_oai")
+        self.assertEqual(result["vid_pid"], "feed:4c4d")
+        self.assertEqual(result["usage"], "ff60:0061")
+        self.assertIsNone(result["report_id"])
+        self.assertEqual(result["report_bytes"], 32)
+        self.assertIn("codex_oai_vial_command", result["required_symbols"])
+
+    def test_vial_oai_profile_requires_vial_protocol_evidence(self) -> None:
+        evidence = {**self.good_vial_evidence, "vial_protocol_ack": False}
+        with self.assertRaisesRegex(self.verifier.VerificationError, "vial_protocol_ack"):
+            self._verify(evidence=evidence, profile="vial")
 
     def test_rejects_unrelated_elf_even_when_symbols_and_emulator_evidence_pass(self) -> None:
         unrelated_elf = self.root / "unrelated.elf"

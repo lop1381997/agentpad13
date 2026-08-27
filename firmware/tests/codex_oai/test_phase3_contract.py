@@ -14,10 +14,13 @@ EMULATOR = REPO / "firmware" / "tests" / "emulator"
 PACKAGE = EMULATOR / "package.json"
 BOOTROM_SCRIPT = EMULATOR / "get-bootrom.sh"
 EVIDENCE = REPO / "firmware" / "evidence" / "codex-oai-emulator.json"
+VIAL_EVIDENCE = REPO / "firmware" / "evidence" / "vial-oai-emulator.json"
 EVIDENCE_README = REPO / "firmware" / "evidence" / "README.md"
 CURRENT_MANIFEST = REPO / "firmware" / "evidence" / "codex-oai-current-manifest.json"
+VIAL_CURRENT_MANIFEST = REPO / "firmware" / "evidence" / "vial-oai-current-manifest.json"
 RUNBOOK = REPO / "docs" / "codex-oai-physical-runbook.md"
 UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_codex_oai.uf2"
+VIAL_UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2"
 
 BOOTROM_COMMIT = "7701ee065f50a04380f81361befd754810cb9e28"
 BOOTROM_SHA256 = "99f8a1f813ce3aa9415884de3fb6c5b962d3c6fa0394b05413ad3c7b3c39ec62"
@@ -31,6 +34,11 @@ class Phase3ReleaseContractTest(unittest.TestCase):
             package["scripts"].get("smoke:codex-oai"),
             "node oai_runner.cjs ../../../release/firmware/prebuilt/agentpad13_codex_oai.uf2 "
             "--json ../../evidence/codex-oai-emulator.json",
+        )
+        self.assertEqual(
+            package["scripts"].get("smoke:vial-oai"),
+            "node vial_oai_runner.cjs ../../../release/firmware/prebuilt/agentpad13_vial_oai.uf2 "
+            "--json ../../evidence/vial-oai-emulator.json",
         )
 
     def test_default_and_vial_smokes_preserve_protocol_v1_release_contract(self) -> None:
@@ -67,6 +75,21 @@ class Phase3ReleaseContractTest(unittest.TestCase):
         self.assertEqual(manifest["size_bytes"], UF2.stat().st_size)
         self.assertEqual(manifest["sha256"], digest)
         self.assertEqual(manifest["emulator_evidence"]["uf2_size_bytes"], UF2.stat().st_size)
+        self.assertEqual(manifest["emulator_evidence"]["uf2_sha256"], digest)
+
+    def test_vial_oai_manifest_and_evidence_match_the_checked_in_uf2(self) -> None:
+        self.assertTrue(VIAL_UF2.is_file(), f"missing release artifact: {VIAL_UF2}")
+        self.assertTrue(VIAL_EVIDENCE.is_file(), f"missing emulator evidence: {VIAL_EVIDENCE}")
+        self.assertTrue(VIAL_CURRENT_MANIFEST.is_file(), f"missing current manifest: {VIAL_CURRENT_MANIFEST}")
+        evidence = json.loads(VIAL_EVIDENCE.read_text(encoding="utf-8"))
+        manifest = json.loads(VIAL_CURRENT_MANIFEST.read_text(encoding="utf-8"))
+        digest = hashlib.sha256(VIAL_UF2.read_bytes()).hexdigest()
+        self.assertEqual(evidence["uf2_size_bytes"], VIAL_UF2.stat().st_size)
+        self.assertEqual(evidence["uf2_sha256"], digest)
+        self.assertTrue(evidence["vial_protocol_ack"])
+        self.assertEqual(evidence["vial_default_k00"], 0x7E02)
+        self.assertEqual(manifest["target"], "loudest_micro:vial_oai")
+        self.assertEqual(manifest["sha256"], digest)
         self.assertEqual(manifest["emulator_evidence"]["uf2_sha256"], digest)
 
     def test_physical_runbook_names_the_current_uf2_candidate(self) -> None:

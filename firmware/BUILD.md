@@ -11,7 +11,7 @@ tree, this guide, the core patches in `patches/`, the validation tools
 `release/firmware/prebuilt/` live in the repo; the multi-gigabyte vial-qmk
 checkout does not.
 
-Status: **both keymaps compile to a clean `.uf2` with zero code warnings**
+Status: **the four target keymaps compile to a clean `.uf2` with zero code warnings**
 (`-Werror` is on). No features were stubbed — the joystick, RGB status
 protocol, touch toggle, encoder map, Vial + VialRGB, and joystick modes are
 all real code. The pin map targets the **current public board
@@ -95,6 +95,8 @@ export PATH="$HOME/arm-gnu-toolchain/bin:$HOME/.local/bin:$PATH"
 
 qmk compile -kb loudest_micro -km default       # -> loudest_micro_default.uf2
 qmk compile -kb loudest_micro -km vial          # -> loudest_micro_vial.uf2
+qmk compile -kb loudest_micro -km codex_oai     # -> loudest_micro_codex_oai.uf2
+qmk compile -kb loudest_micro -km vial_oai      # -> loudest_micro_vial_oai.uf2
 ```
 
 Both drop a `.uf2` in the vial-qmk root. Prebuilt copies live in
@@ -105,6 +107,8 @@ Both drop a `.uf2` in the vial-qmk root. Prebuilt copies live in
 |---|---|---|
 | `-km vial` | `loudest_micro_vial.uf2` | **`release/firmware/prebuilt/agentpad13.uf2`** — the one users want |
 | `-km default` | `loudest_micro_default.uf2` | **`release/firmware/prebuilt/agentpad13_reference.uf2`** — the byte-reproducible reference |
+| `-km vial_oai` | `loudest_micro_vial_oai.uf2` | **`release/firmware/prebuilt/agentpad13_vial_oai.uf2`** — Vial plus the Phase-3 OAI channel |
+| `-km codex_oai` | `loudest_micro_codex_oai.uf2` | **`release/firmware/prebuilt/agentpad13_codex_oai.uf2`** — direct OAI compatibility target |
 
 ### 3.1 Validate
 
@@ -139,10 +143,34 @@ raw HID PING→CAPS):
 cd firmware/tests/emulator
 ./get-bootrom.sh && npm install
 npm run smoke:default && npm run smoke:vial     # -> EMULATOR SMOKE: PASS
+npm run smoke:codex-oai && npm run smoke:vial-oai
 ```
 
 Recorded results and the emulator-fidelity caveats are in
 `firmware/FIRMWARE-V4-NOTES.md` §4d.
+
+### AgentPad13 Vial OAI (Phase 3 firmware foundation)
+
+`loudest_micro:vial_oai` is the Phase-3 target for a keyboard that remains
+fully configurable in Vial while exposing the OAI task/status channel used by
+the future native AgentPad13 app. It has the standard Vial Raw HID transport:
+USB `FEED:4C4D`, usage `FF60:61`, no Report ID and 32-byte reports. Vial
+commands are untouched; the firmware reserves only frames beginning with
+`0xA6` for OAI, encoded as `[0xA6, channel, payload_length, payload…]`.
+
+The target provides eight editable layers. Vial owns the dynamic keymap,
+macros and encoder mappings in EEPROM; it is therefore intentionally
+incompatible with the direct target's `v.oai.keymap.get/set` RPC. The shipped
+Vial definition is
+`firmware/loudest_micro/keymaps/vial_oai/vial.json`. Load that definition in
+Vial when connecting a development build of this keyboard.
+
+The checked-in candidate is
+`release/firmware/prebuilt/agentpad13_vial_oai.uf2`, 124,416 bytes, SHA-256
+`848e7249a3ccae3dcf8a52a25bbc1493de358f6b3c24bdb1c19aa7c8fdc49aef`.
+Its emulator evidence proves both a normal Vial response and a dynamic-keymap
+read of layer 0 / key 0 (`OAI_AG00`). The OAI desktop application itself is a
+later Phase-3 deliverable; this target is its stable device-side contract.
 
 ### AgentPad13 Direct OAI (experimental alternative)
 
@@ -158,8 +186,8 @@ The repository builder requires exact Vial-QMK commit
 and Arm GNU Toolchain 15.2.Rel1 (gcc 15.2.1). It verifies the repository-owned
 `patches/0001-via-command-kb-backport.patch`, applies or verifies
 `patches/0002-raw-hid-report-id-chibios.patch`, checks their pinned digests, stages
-the keyboard through a temporary link, builds `default`, `vial`, and
-`codex_oai`, and publishes only the OAI UF2:
+the keyboard through a temporary link, builds `default`, `vial`, `codex_oai`,
+and `vial_oai`, and atomically publishes both OAI UF2s:
 
 ```sh
 python3 firmware/tools/build_codex_oai.py \
@@ -169,7 +197,7 @@ python3 firmware/tools/build_codex_oai.py \
 
 The current output is
 `release/firmware/prebuilt/agentpad13_codex_oai.uf2`, 93,696 bytes, SHA-256
-`fcb50b2419419be43b7cf90b00a96b16063fcaf182bc24b9642d57e2e8adf54d`.
+`a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
 Run the complete host and emulator gates from the repository root:
 
 ```sh
@@ -177,23 +205,36 @@ python3 -m unittest discover -s firmware/tests/codex_oai -p 'test_*.py'
 cd firmware/tests/emulator
 npm ci
 npm run smoke:codex-oai
+npm run smoke:vial-oai
 cd ../../..
 
 python3 firmware/tools/verify_codex_oai_artifact.py \
+  --profile direct \
   --uf2 release/firmware/prebuilt/agentpad13_codex_oai.uf2 \
   --elf /path/to/disposable/pinned-vial-qmk/.build/loudest_micro_codex_oai.elf \
   --emulator-evidence firmware/evidence/codex-oai-emulator.json \
   --output firmware/evidence/codex-oai-current-manifest.json
+
+python3 firmware/tools/verify_codex_oai_artifact.py \
+  --profile vial \
+  --uf2 release/firmware/prebuilt/agentpad13_vial_oai.uf2 \
+  --elf /path/to/disposable/pinned-vial-qmk/.build/loudest_micro_vial_oai.elf \
+  --emulator-evidence firmware/evidence/vial-oai-emulator.json \
+  --output firmware/evidence/vial-oai-current-manifest.json
 ```
 
 The builder and verifier operate on local files only and report zero flash
 operations; they do not search for or write a USB device or removable volume.
 The current offline evidence is in
 [`evidence/codex-oai-emulator.json`](evidence/codex-oai-emulator.json) and
-[`evidence/codex-oai-current-manifest.json`](evidence/codex-oai-current-manifest.json).
+[`evidence/codex-oai-current-manifest.json`](evidence/codex-oai-current-manifest.json),
+plus the corresponding Vial OAI files
+[`evidence/vial-oai-emulator.json`](evidence/vial-oai-emulator.json) and
+[`evidence/vial-oai-current-manifest.json`](evidence/vial-oai-current-manifest.json).
 Physical validation remains PENDING. Before any hardware operation, obtain the
 literal approval required by
 [`../docs/codex-oai-physical-runbook.md`](../docs/codex-oai-physical-runbook.md);
+or [`../docs/vial-oai-physical-runbook.md`](../docs/vial-oai-physical-runbook.md);
 this build guide does not authorize installation or flashing.
 
 ## 4. Flash

@@ -1,11 +1,17 @@
 # Evidence files
 
-`codex-oai-emulator.json` is the current emulator capture for
-`release/firmware/prebuilt/agentpad13_codex_oai.uf2`. It was regenerated from
-this checkout and must match the UF2 SHA-256 and byte size recorded in
-`codex-oai-current-manifest.json`. The current port rebuild is 93,696 bytes
-with SHA-256
-`fcb50b2419419be43b7cf90b00a96b16063fcaf182bc24b9642d57e2e8adf54d`.
+`codex-oai-emulator.json` is the current emulator capture for the direct
+transport, `release/firmware/prebuilt/agentpad13_codex_oai.uf2`. It must match
+the UF2 SHA-256 and byte size recorded in `codex-oai-current-manifest.json`.
+The current port rebuild is 93,696 bytes with SHA-256
+`a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
+
+`vial-oai-emulator.json` is the equivalent capture for
+`release/firmware/prebuilt/agentpad13_vial_oai.uf2`, the eight-layer Vial OAI
+target. Its evidence must match `vial-oai-current-manifest.json`; it proves
+both ordinary Vial traffic and the default dynamic keymap. The current Vial
+OAI rebuild is 124,416 bytes with SHA-256
+`848e7249a3ccae3dcf8a52a25bbc1493de358f6b3c24bdb1c19aa7c8fdc49aef`.
 
 Two earlier provenance layers remain explicit:
 
@@ -20,7 +26,7 @@ Two earlier provenance layers remain explicit:
   not a claim about the current release UF2.
 
 To produce a new full manifest after a clean QMK build, run
-`firmware/tools/verify_codex_oai_artifact.py` with the newly generated ELF, the
-current emulator JSON and an output path below this directory. The verifier
-checks the UF2 hash, ELF size/symbols and emulator handshake atomically; no
-device or removable volume is accessed.
+`firmware/tools/verify_codex_oai_artifact.py` with the matching `--profile`,
+newly generated ELF, current emulator JSON and an output path below this
+directory. The verifier checks the UF2 hash, ELF size/symbols and emulator
+handshake atomically; no device or removable volume is accessed.

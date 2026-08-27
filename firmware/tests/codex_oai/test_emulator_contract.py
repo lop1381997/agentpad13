@@ -20,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 EMULATOR = REPO / "firmware" / "tests" / "emulator"
 UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_codex_oai.uf2"
+VIAL_OAI_UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2"
 
 
 def run_oai_emulator(uf2: Path) -> dict[str, object]:
@@ -28,6 +29,20 @@ def run_oai_emulator(uf2: Path) -> dict[str, object]:
         evidence_path = Path(directory) / "evidence.json"
         subprocess.run(
             ["node", "oai_runner.cjs", str(uf2), "--json", str(evidence_path)],
+            cwd=EMULATOR,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return json.loads(evidence_path.read_text(encoding="utf-8"))
+
+
+def run_vial_oai_emulator(uf2: Path) -> dict[str, object]:
+    """Run the shared OAI runner in its Vial transport mode."""
+    with tempfile.TemporaryDirectory(prefix="agentpad13_vial_oai_emulator_") as directory:
+        evidence_path = Path(directory) / "evidence.json"
+        subprocess.run(
+            ["node", "vial_oai_runner.cjs", str(uf2), "--json", str(evidence_path)],
             cwd=EMULATOR,
             check=True,
             text=True,
@@ -68,15 +83,19 @@ class OaiEmulatorContractTest(unittest.TestCase):
     def test_runner_has_exact_single_frame_wrapper_and_endpoint_contract(self) -> None:
         runner = (EMULATOR / "oai_runner.cjs").read_text(encoding="utf-8")
         for fragment in (
+            "const OAI_VIAL = process.env.AGENTPAD_OAI_VIAL === '1';",
+            "const OAI_FRAME_PREFIX = OAI_VIAL ? 0xa6 : OAI_REPORT_ID;",
+            "const OAI_REPORT_BYTES = OAI_VIAL ? 32 : 64;",
             "const payload = Buffer.from(json, 'utf8');",
-            "if (payload.length > 61) throw new Error('single-frame fixture too large');",
-            "const report = Buffer.alloc(64);",
-            "report[0] = 6;",
+            "if (payload.length > OAI_MAX_PAYLOAD) throw new Error('single-frame fixture too large');",
+            "const report = Buffer.alloc(OAI_REPORT_BYTES);",
+            "report[0] = OAI_FRAME_PREFIX;",
             "report[1] = 2;",
             "report[2] = payload.length;",
             "payload.copy(report, 3);",
-            "const OAI_USAGE_PAGE = 0xff00;",
+            "const OAI_USAGE_PAGE = OAI_VIAL ? 0xff60 : 0xff00;",
             "const OAI_USAGE = 0x0061;",
+            "const OAI_EXPECTED_VID_PID = OAI_VIAL ? 'feed:4c4d' : '303a:8360';",
             "wValue: 0x2200,",
             "wIndex: raw.number,",
             "function keyboardHid(interfaces)",
@@ -89,6 +108,9 @@ class OaiEmulatorContractTest(unittest.TestCase):
             "edgesAfterStatus > edgesBeforeStatus",
         ):
             self.assertIn(fragment, runner)
+        wrapper = (EMULATOR / "vial_oai_runner.cjs").read_text(encoding="utf-8")
+        self.assertIn("AGENTPAD_OAI_VIAL", wrapper)
+        self.assertIn("runner.main()", wrapper)
 
     def test_fragmenter_and_keyboard_interface_detection_execute_on_host(self) -> None:
         if shutil.which("node") is None:
@@ -105,6 +127,44 @@ const keyboard = runner.keyboardHid([
 if (reports.length < 2 || reports.some((report) => report.length !== 64 || report[0] !== 6) || rebuilt !== json || !keyboard || keyboard.number !== 0) process.exit(1);
 '''
         subprocess.run(["node", "-e", script], cwd=EMULATOR, check=True)
+
+    def test_vial_fragmenter_uses_the_standard_vial_raw_hid_frame(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is unavailable")
+        script = r'''
+const runner = require('./oai_runner.cjs');
+const json = '{"method":"v.oai.hid","params":{"k":"AG00","act":1}}\r\n';
+const reports = runner.oaiReports(json);
+const messages = runner.readOaiMessages(reports);
+if (reports.length < 2 || reports.some((report) => report.length !== 32 || report[0] !== 0xa6) || messages.length !== 1 || messages[0] !== json) process.exit(1);
+'''
+        environment = {**__import__("os").environ, "AGENTPAD_OAI_VIAL": "1"}
+        subprocess.run(["node", "-e", script], cwd=EMULATOR, env=environment, check=True)
+
+    def test_vial_oai_evidence_requires_vial_and_oai_coexistence(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("pre-hardware emulator gate: node is unavailable")
+        if not VIAL_OAI_UF2.is_file():
+            self.skipTest(
+                "pre-hardware build gate: agentpad13_vial_oai.uf2 is not "
+                "available; run firmware/tools/build_codex_oai.py first"
+            )
+        evidence = run_vial_oai_emulator(VIAL_OAI_UF2)
+        self.assertTrue(evidence["usb_enumerated"])
+        self.assertEqual(evidence["vid_pid"], "feed:4c4d")
+        self.assertEqual(evidence["usage"], "ff60:0061")
+        self.assertIsNone(evidence["report_id"])
+        self.assertEqual(evidence["report_bytes"], 32)
+        self.assertTrue(evidence["descriptor_verified"])
+        self.assertTrue(evidence["vial_protocol_ack"])
+        self.assertEqual(evidence["vial_default_k00"], 0x7E02)
+        self.assertTrue(evidence["rgbcfg_ack"])
+        self.assertTrue(evidence["thstatus_ack"])
+        self.assertTrue(evidence["device_status_ack"])
+        self.assertEqual(evidence["key_event"], {"k": "AG00", "act": 1})
+        self.assertTrue(evidence["ws2812_activity"])
+        self.assertEqual(evidence["uf2_size_bytes"], VIAL_OAI_UF2.stat().st_size)
+        self.assertEqual(evidence["uf2_sha256"], hashlib.sha256(VIAL_OAI_UF2.read_bytes()).hexdigest())
 
 
 if __name__ == "__main__":

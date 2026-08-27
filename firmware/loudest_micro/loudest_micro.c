@@ -18,6 +18,10 @@
 #include "analog.h"
 #include <string.h>
 
+#if defined(CODEX_OAI_VIAL)
+#    include "keymaps/codex_oai/codex_oai.h"
+#endif
+
 // RP2040 hardware access for the SW14 runtime read (see the SW14 section far
 // below). This is the SAME include set the in-tree driver that solves the
 // identical hazard uses -- platforms/chibios/drivers/wear_leveling/
@@ -413,6 +417,11 @@ static bool loudest_tail_zero(const uint8_t *data, uint8_t from, uint8_t upto) {
 }
 
 bool via_command_kb(uint8_t *data, uint8_t length) {
+    // Vial-OAI reserves only its A6-prefixed frames. Every other command,
+    // including VIA's dynamic-keymap reads, belongs to VIA/Vial unchanged.
+#if defined(CODEX_OAI_VIAL)
+    return codex_oai_vial_command(data, length);
+#endif
     switch (data[0]) {
         case LOUDEST_CMD_SET_KEY:
             if (length >= 6 && data[1] < LOUDEST_LED_COUNT && data[5] <= LOUDEST_FX_BLINK && loudest_tail_zero(data, 6, length) && !loudest_tail_zero(data, 1, 6)) {

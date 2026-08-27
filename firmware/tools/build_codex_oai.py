@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Stage and build the isolated AgentPad13 direct-OAI QMK keymap.
+"""Stage and build the isolated AgentPad13 OAI QMK keymaps.
 
 The script deliberately operates on a caller-provided, disposable QMK
 worktree.  It proves the pinned Vial source and toolchain before linking the
 AgentPad13 keyboard tree into that worktree, then removes only the link it
-created.  Its only published artifact is the direct-OAI UF2 in this repo.
+created. It publishes separate Direct-OAI and Vial-OAI UF2 artifacts in this
+repository.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from typing import Mapping, Sequence
 
 PINNED_QMK_COMMIT = "00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb"
 KEYBOARD_NAME = "loudest_micro"
-KEYMAPS = ("default", "vial", "codex_oai")
+KEYMAPS = ("default", "vial", "codex_oai", "vial_oai")
 REQUIRED_SUBMODULES = (
     "lib/chibios",
     "lib/chibios-contrib",
@@ -33,6 +34,7 @@ REQUIRED_SUBMODULES = (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 KEYBOARD_SOURCE = REPO_ROOT / "firmware" / KEYBOARD_NAME
 OAI_ARTIFACT = REPO_ROOT / "release" / "firmware" / "prebuilt" / "agentpad13_codex_oai.uf2"
+VIAL_OAI_ARTIFACT = REPO_ROOT / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2"
 VIA_COMMAND_PATCH = REPO_ROOT / "firmware" / "patches" / "0001-via-command-kb-backport.patch"
 OAI_DESCRIPTOR_PATCH = REPO_ROOT / "firmware" / "patches" / "0002-raw-hid-report-id-chibios.patch"
 VIA_COMMAND_PATCH_SHA256 = "b12c375f7de6361fb2b26ecd003b0ffd717fb54d1441f37574866c86f473268c"
@@ -303,13 +305,14 @@ def _qmk_environment(qmk_home: Path) -> dict[str, str]:
 
 
 def run_lint(qmk_home: Path) -> None:
-    """Run the QMK linter only for the isolated direct-OAI keymap."""
-    _run(
-        ("qmk", "lint", "-kb", KEYBOARD_NAME, "-km", "codex_oai", "--strict"),
-        cwd=qmk_home,
-        env=_qmk_environment(qmk_home),
-    )
-    print(f"lint {KEYBOARD_NAME}:codex_oai PASS")
+    """Run the QMK linter for each isolated OAI keymap."""
+    for keymap in ("codex_oai", "vial_oai"):
+        _run(
+            ("qmk", "lint", "-kb", KEYBOARD_NAME, "-km", keymap, "--strict"),
+            cwd=qmk_home,
+            env=_qmk_environment(qmk_home),
+        )
+        print(f"lint {KEYBOARD_NAME}:{keymap} PASS")
 
 
 def run_build(qmk_home: Path, keymap: str, *, clean: bool) -> Path:
@@ -329,7 +332,7 @@ def run_build(qmk_home: Path, keymap: str, *, clean: bool) -> Path:
 
 
 def publish_oai_uf2(source: Path, destination: Path = OAI_ARTIFACT) -> None:
-    """Atomically replace only the generated direct-OAI artifact."""
+    """Atomically replace one generated OAI artifact at its exact destination."""
     if not source.is_file() or source.is_symlink():
         raise BuildError(f"refusing to publish a non-regular artifact: {source}")
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -360,6 +363,7 @@ def build_all(qmk_home: Path, *, clean: bool) -> None:
         run_lint(qmk_home)
         artifacts = {keymap: run_build(qmk_home, keymap, clean=clean) for keymap in KEYMAPS}
         publish_oai_uf2(artifacts["codex_oai"])
+        publish_oai_uf2(artifacts["vial_oai"], VIAL_OAI_ARTIFACT)
     finally:
         cleanup_keyboard_link(link, expected_target=KEYBOARD_SOURCE)
     print("flash operations 0")

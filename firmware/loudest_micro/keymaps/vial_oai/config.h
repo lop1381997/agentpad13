@@ -15,5 +15,6 @@
 // OAI shares Vial's standard 32-byte Raw HID endpoint.  This prefix is outside
 // VIA's command range and Vial's 0xFE command prefix, so via_command_kb() can
 // claim only OAI frames before Vial decodes the rest.
+#define RAW_EPSIZE 32
 #define CODEX_OAI_VIAL
 #define OAI_VIAL_FRAME_PREFIX 0xA6

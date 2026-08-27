@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the generated AgentPad13 direct-OAI firmware artifact offline.
+"""Verify generated AgentPad13 Direct-OAI or Vial-OAI firmware offline.
 
 This tool accepts only regular local files, invokes the ARM inspection tools,
 and writes a reproducible JSON manifest beneath ``firmware/evidence``.  It has
@@ -22,14 +22,64 @@ from typing import Any, Iterable, Mapping, Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_ROOT = REPO_ROOT / "firmware" / "evidence"
-TARGET = "loudest_micro:codex_oai"
-EXPECTED_VID_PID = "303a:8360"
-EXPECTED_USAGE = "ff00:0061"
-EXPECTED_REPORT_ID = 6
-EXPECTED_REPORT_BYTES = 64
-REQUIRED_SYMBOLS = frozenset(
-    {"raw_hid_receive", "codex_oai_notify", "codex_led_render", "encoder_update_user"}
+
+
+class ArtifactProfile:
+    """Verification expectations for one published OAI transport."""
+
+    def __init__(
+        self,
+        *,
+        target: str,
+        vid_pid: str,
+        usage: str,
+        report_id: int | None,
+        report_bytes: int,
+        required_symbols: frozenset[str],
+        required_evidence: tuple[str, ...] = (),
+        default_k00: int | None = None,
+    ) -> None:
+        self.target = target
+        self.vid_pid = vid_pid
+        self.usage = usage
+        self.report_id = report_id
+        self.report_bytes = report_bytes
+        self.required_symbols = required_symbols
+        self.required_evidence = required_evidence
+        self.default_k00 = default_k00
+
+
+DIRECT_PROFILE = ArtifactProfile(
+    target="loudest_micro:codex_oai",
+    vid_pid="303a:8360",
+    usage="ff00:0061",
+    report_id=6,
+    report_bytes=64,
+    required_symbols=frozenset(
+        {"raw_hid_receive", "codex_oai_notify", "codex_led_render", "encoder_update_user"}
+    ),
 )
+VIAL_PROFILE = ArtifactProfile(
+    target="loudest_micro:vial_oai",
+    vid_pid="feed:4c4d",
+    usage="ff60:0061",
+    report_id=None,
+    report_bytes=32,
+    required_symbols=frozenset(
+        {"codex_oai_vial_command", "codex_oai_notify", "codex_led_render"}
+    ),
+    required_evidence=("vial_protocol_ack",),
+    default_k00=0x7E02,
+)
+PROFILES = {"direct": DIRECT_PROFILE, "vial": VIAL_PROFILE}
+
+# Backward-compatible names for existing direct-OAI consumers and tests.
+TARGET = DIRECT_PROFILE.target
+EXPECTED_VID_PID = DIRECT_PROFILE.vid_pid
+EXPECTED_USAGE = DIRECT_PROFILE.usage
+EXPECTED_REPORT_ID = DIRECT_PROFILE.report_id
+EXPECTED_REPORT_BYTES = DIRECT_PROFILE.report_bytes
+REQUIRED_SYMBOLS = DIRECT_PROFILE.required_symbols
 REQUIRED_ACKS = ("rgbcfg_ack", "thstatus_ack", "device_status_ack")
 DEFINED_SYMBOL_TYPES = frozenset("TtDdBbRrSsGgVW")
 UF2_BLOCK_SIZE = 512
@@ -239,10 +289,12 @@ def elf_symbols(path: Path) -> dict[str, str]:
     return symbols
 
 
-def verify_symbols(symbols: Mapping[str, str] | Iterable[str]) -> None:
-    """Require defined direct-OAI code/data symbols, never undefined imports."""
+def verify_symbols(
+    symbols: Mapping[str, str] | Iterable[str], *, required_symbols: Iterable[str] = REQUIRED_SYMBOLS
+) -> None:
+    """Require profile-owned defined code/data symbols, never undefined imports."""
     available = dict(symbols) if isinstance(symbols, Mapping) else {name: "T" for name in symbols}
-    for required in sorted(REQUIRED_SYMBOLS):
+    for required in sorted(required_symbols):
         if required not in available:
             raise VerificationError(f"required ELF symbol missing: {required}")
         if available[required] not in DEFINED_SYMBOL_TYPES:
@@ -252,20 +304,21 @@ def verify_symbols(symbols: Mapping[str, str] | Iterable[str]) -> None:
 
 
 def verify_evidence(
-    evidence: Mapping[str, Any], *, artifact_sha256: str, artifact_size: int
+    evidence: Mapping[str, Any], *, artifact_sha256: str, artifact_size: int,
+    profile: ArtifactProfile = DIRECT_PROFILE,
 ) -> None:
     """Require the exact enumeration, descriptor, protocol, key and LED proof."""
-    if evidence.get("vid_pid") != EXPECTED_VID_PID:
-        raise VerificationError(f"unexpected VID:PID; expected {EXPECTED_VID_PID}")
-    if evidence.get("usage") != EXPECTED_USAGE:
-        raise VerificationError(f"unexpected Raw HID usage; expected {EXPECTED_USAGE}")
-    if evidence.get("report_id") != EXPECTED_REPORT_ID:
-        raise VerificationError(f"unexpected report ID; expected {EXPECTED_REPORT_ID}")
-    if evidence.get("report_bytes") != EXPECTED_REPORT_BYTES:
-        raise VerificationError(f"unexpected report byte count; expected {EXPECTED_REPORT_BYTES}")
+    if evidence.get("vid_pid") != profile.vid_pid:
+        raise VerificationError(f"unexpected VID:PID; expected {profile.vid_pid}")
+    if evidence.get("usage") != profile.usage:
+        raise VerificationError(f"unexpected Raw HID usage; expected {profile.usage}")
+    if evidence.get("report_id") != profile.report_id:
+        raise VerificationError(f"unexpected report ID; expected {profile.report_id}")
+    if evidence.get("report_bytes") != profile.report_bytes:
+        raise VerificationError(f"unexpected report byte count; expected {profile.report_bytes}")
     for field in (
         "usb_enumerated", "keyboard_hid_enumerated", "oai_hid_enumerated",
-        "descriptor_verified", *REQUIRED_ACKS, "ws2812_activity",
+        "descriptor_verified", *REQUIRED_ACKS, "ws2812_activity", *profile.required_evidence,
     ):
         if evidence.get(field) is not True:
             raise VerificationError(f"emulator evidence did not prove {field}")
@@ -280,28 +333,40 @@ def verify_evidence(
         raise VerificationError("emulator evidence did not prove visible task-driven RGB")
     if evidence.get("key_event") != {"k": "AG00", "act": 1}:
         raise VerificationError("emulator evidence did not prove the AG00 key event")
+    if profile.default_k00 is not None and evidence.get("vial_default_k00") != profile.default_k00:
+        raise VerificationError(
+            f"emulator evidence did not prove default K00 keycode 0x{profile.default_k00:04x}"
+        )
 
 
-def verify(uf2: Path, elf: Path, evidence: Mapping[str, Any]) -> dict[str, Any]:
+def verify(
+    uf2: Path, elf: Path, evidence: Mapping[str, Any], *, profile: str = "direct"
+) -> dict[str, Any]:
     """Return a JSON-safe manifest payload after all offline checks pass."""
+    try:
+        selected_profile = PROFILES[profile]
+    except KeyError as exc:
+        raise VerificationError(f"unknown artifact profile: {profile}") from exc
     digest, size = sha256_and_size(uf2)
-    verify_evidence(evidence, artifact_sha256=digest, artifact_size=size)
+    verify_evidence(
+        evidence, artifact_sha256=digest, artifact_size=size, profile=selected_profile
+    )
     equivalence = verify_elf_uf2_equivalence(uf2, elf)
     metrics = elf_size(elf)
-    verify_symbols(elf_symbols(elf))
+    verify_symbols(elf_symbols(elf), required_symbols=selected_profile.required_symbols)
     return {
         "status": "pass",
-        "target": TARGET,
-        "vid_pid": EXPECTED_VID_PID,
-        "usage": EXPECTED_USAGE,
-        "report_id": EXPECTED_REPORT_ID,
-        "report_bytes": EXPECTED_REPORT_BYTES,
+        "target": selected_profile.target,
+        "vid_pid": selected_profile.vid_pid,
+        "usage": selected_profile.usage,
+        "report_id": selected_profile.report_id,
+        "report_bytes": selected_profile.report_bytes,
         "sha256": digest,
         "size_bytes": size,
         "elf_sha256": file_sha256(elf, label="ELF"),
         "elf_size": metrics,
         "elf_uf2_equivalence": equivalence,
-        "required_symbols": sorted(REQUIRED_SYMBOLS),
+        "required_symbols": sorted(selected_profile.required_symbols),
         "emulator_evidence": {
             "usb_enumerated": evidence["usb_enumerated"],
             "descriptor_verified": evidence["descriptor_verified"],
@@ -315,6 +380,14 @@ def verify(uf2: Path, elf: Path, evidence: Mapping[str, Any]) -> dict[str, Any]:
             "key_event": evidence["key_event"],
             "ws2812_activity": evidence["ws2812_activity"],
             "task_status_fragment_count": evidence["task_status_fragment_count"],
+            **(
+                {
+                    "vial_protocol_ack": evidence["vial_protocol_ack"],
+                    "vial_default_k00": evidence["vial_default_k00"],
+                }
+                if selected_profile.default_k00 is not None
+                else {}
+            ),
         },
     }
 
@@ -380,13 +453,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--elf", required=True, type=Path)
     parser.add_argument("--emulator-evidence", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--profile", choices=tuple(PROFILES), default="direct")
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        manifest = verify(args.uf2, args.elf, load_evidence(args.emulator_evidence))
+        manifest = verify(
+            args.uf2, args.elf, load_evidence(args.emulator_evidence), profile=args.profile
+        )
         write_manifest(args.output, manifest)
     except VerificationError as exc:
         print(f"artifact verification failed: {exc}", file=sys.stderr)

@@ -1,7 +1,7 @@
 {
   "uf2_blocks": 183,
   "uf2_size_bytes": 93696,
-  "uf2_sha256": "fcb50b2419419be43b7cf90b00a96b16063fcaf182bc24b9642d57e2e8adf54d",
+  "uf2_sha256": "a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9",
   "usb_enumerated": true,
   "vid_pid": "303a:8360",
   "usage": "ff00:0061",
@@ -22,6 +22,8 @@
     "out_bytes": 64
   },
   "descriptor_verified": true,
+  "vial_protocol_ack": null,
+  "vial_default_k00": null,
   "rgbcfg_ack": true,
   "thstatus_ack": true,
   "device_status_ack": true,
@@ -45,6 +47,6 @@
     "[500.1ms] raw IN 64B",
     "[790.2ms] raw IN 64B",
     "[1310.1ms] raw IN 64B",
-    "[1584.9ms] raw IN 64B"
+    "[1585.0ms] raw IN 64B"
   ]
 }

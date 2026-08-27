@@ -1,9 +1,9 @@
-// Direct OAI UF2 smoke test on rp2040js.
+// AgentPad13 OAI UF2 smoke test on rp2040js.
 //
 // This runner deliberately owns a separate USB host fixture from runner.cjs:
-// default and Vial keep their historical 32-byte status protocol unchanged.
-// It exercises the 64-byte, report-ID-6 OAI endpoint used by the codex_oai
-// keymap and writes only emulator evidence (never a physical device).
+// Direct OAI uses a 64-byte report-ID-6 endpoint; Vial OAI uses Vial's
+// standard 32-byte endpoint with its reserved 0xA6 prefix. It writes only
+// emulator evidence (never a physical device).
 'use strict';
 
 const fs = require('fs');
@@ -27,10 +27,14 @@ const { bootromB1 } = require('./bootrom.cjs');
 const UF2_MAGIC0 = 0x0a324655;
 const UF2_MAGIC1 = 0x9e5d5157;
 const FLASH_START = 0x10000000;
-const OAI_REPORT_ID = 6;
-const OAI_REPORT_BYTES = 64;
-const OAI_USAGE_PAGE = 0xff00;
+const OAI_VIAL = process.env.AGENTPAD_OAI_VIAL === '1';
+const OAI_REPORT_ID = OAI_VIAL ? null : 6;
+const OAI_FRAME_PREFIX = OAI_VIAL ? 0xa6 : OAI_REPORT_ID;
+const OAI_REPORT_BYTES = OAI_VIAL ? 32 : 64;
+const OAI_MAX_PAYLOAD = OAI_REPORT_BYTES - 3;
+const OAI_USAGE_PAGE = OAI_VIAL ? 0xff60 : 0xff00;
 const OAI_USAGE = 0x0061;
+const OAI_EXPECTED_VID_PID = OAI_VIAL ? 'feed:4c4d' : '303a:8360';
 
 function usageHex(value, width) {
   return value.toString(16).padStart(width, '0');
@@ -38,9 +42,9 @@ function usageHex(value, width) {
 
 function oaiReport(json) {
   const payload = Buffer.from(json, 'utf8');
-  if (payload.length > 61) throw new Error('single-frame fixture too large');
-  const report = Buffer.alloc(64);
-  report[0] = 6;
+  if (payload.length > OAI_MAX_PAYLOAD) throw new Error('single-frame fixture too large');
+  const report = Buffer.alloc(OAI_REPORT_BYTES);
+  report[0] = OAI_FRAME_PREFIX;
   report[1] = 2;
   report[2] = payload.length;
   payload.copy(report, 3);
@@ -51,8 +55,8 @@ function oaiReports(json) {
   const payload = Buffer.from(json, 'utf8');
   if (payload.length === 0) return [oaiReport('')];
   const reports = [];
-  for (let offset = 0; offset < payload.length; offset += 61) {
-    reports.push(oaiReport(payload.subarray(offset, offset + 61).toString('utf8')));
+  for (let offset = 0; offset < payload.length; offset += OAI_MAX_PAYLOAD) {
+    reports.push(oaiReport(payload.subarray(offset, offset + OAI_MAX_PAYLOAD).toString('utf8')));
   }
   return reports;
 }
@@ -143,27 +147,45 @@ function keyboardHid(interfaces) {
 }
 
 function readOaiFrame(frame) {
-  if (frame.length !== OAI_REPORT_BYTES || frame[0] !== OAI_REPORT_ID || frame[1] !== 2 || frame[2] > 61) return null;
+  if (frame.length !== OAI_REPORT_BYTES || frame[0] !== OAI_FRAME_PREFIX || frame[1] !== 2 || frame[2] > OAI_MAX_PAYLOAD) return null;
   return frame.subarray(3, 3 + frame[2]).toString('utf8');
 }
 
+function readOaiMessages(frames) {
+  const messages = [];
+  let pending = '';
+  for (const frame of frames) {
+    const fragment = readOaiFrame(frame);
+    if (fragment === null) continue;
+    pending += fragment;
+    for (;;) {
+      const end = pending.indexOf('\r\n');
+      if (end < 0) break;
+      messages.push(pending.slice(0, end + 2));
+      pending = pending.slice(end + 2);
+    }
+  }
+  return messages;
+}
+
 function requireAck(frames, expected) {
-  return frames.some((frame) => readOaiFrame(frame) === expected);
+  return readOaiMessages(frames).includes(expected);
 }
 
 function reportDescriptorMatches(report) {
   // Raw HID's compact descriptor identifies its vendor collection with these
-  // little-endian Usage Page / Usage items.  Report ID and 64-byte IN/OUT
-  // counts are asserted separately, so this remains robust to item ordering.
-  const hasPage = report.some((_, index) => index + 2 < report.length && report[index] === 0x06 && report[index + 1] === 0x00 && report[index + 2] === 0xff);
+  // little-endian Usage Page / Usage items. Report-ID and report-size details
+  // differ between the isolated Direct and shared Vial OAI transports.
+  const hasPage = report.some((_, index) => index + 2 < report.length && report[index] === 0x06 && report[index + 1] === (OAI_USAGE_PAGE & 0xff) && report[index + 2] === (OAI_USAGE_PAGE >> 8));
   const hasUsage = report.some((_, index) =>
     (index + 1 < report.length && report[index] === 0x09 && report[index + 1] === OAI_USAGE) ||
     (index + 2 < report.length && report[index] === 0x0a && report[index + 1] === OAI_USAGE && report[index + 2] === 0x00)
   );
-  const hasReportId = report.some((_, index) => report[index] === 0x85 && report[index + 1] === OAI_REPORT_ID);
-  // QMK describes 63 payload bytes when a report-ID byte is enabled. The
-  // descriptor plus the endpoint's 64-byte max packet proves the full frame.
-  const hasPayload = report.some((_, index) => report[index] === 0x95 && report[index + 1] === OAI_REPORT_BYTES - 1);
+  const hasReportId = OAI_REPORT_ID === null
+    ? !report.some((_, index) => report[index] === 0x85)
+    : report.some((_, index) => report[index] === 0x85 && report[index + 1] === OAI_REPORT_ID);
+  const descriptorPayloadBytes = OAI_REPORT_ID === null ? OAI_REPORT_BYTES : OAI_REPORT_BYTES - 1;
+  const hasPayload = report.some((_, index) => index + 1 < report.length && report[index] === 0x95 && report[index + 1] === descriptorPayloadBytes);
   return hasPage && hasUsage && hasReportId && hasPayload;
 }
 
@@ -198,7 +220,8 @@ function main() {
     const originalRead = dma.readUint32.bind(dma);
     dma.readUint32 = (offset) => (offset === 0x444 ? 0 : originalRead(offset));
   }
-  for (const pin of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]) mcu.gpio[pin].setInputValue(true);
+  for (const pin of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) mcu.gpio[pin].setInputValue(true);
+  mcu.gpio[16].setInputValue(false);
 
   let gp17Edges = 0;
   mcu.gpio[17].addListener(() => gp17Edges++);
@@ -357,7 +380,7 @@ function main() {
   }
 
   const raw = rawInterface();
-  if (!raw) throw new Error('USB configuration has no 64-byte vendor HID interface');
+  if (!raw) throw new Error(`USB configuration has no ${OAI_REPORT_BYTES}-byte vendor HID interface`);
   const keyboard = keyboardHid(interfaces);
   if (!keyboard) throw new Error('USB configuration has no boot keyboard HID interface');
   if (!raw.reportBytes) throw new Error('OAI HID descriptor has no report descriptor length');
@@ -374,6 +397,32 @@ function main() {
   }));
   for (let attempt = 0; attempt < 20 && !reportDescriptorDone; attempt++) runForMicros(100000);
   if (!reportDescriptorDone) throw new Error('OAI HID report descriptor was not returned');
+
+  function vialProtocolProbe() {
+    const before = rawFrames.length;
+    const request = Buffer.alloc(OAI_REPORT_BYTES);
+    request[0] = 0x01; // VIA get_protocol_version; deliberately not an OAI prefix.
+    sendRaw(request);
+    runForMicros(250000);
+    return rawFrames.slice(before).some((frame) => frame.length === OAI_REPORT_BYTES && frame[0] === 0x01);
+  }
+
+  const vialProtocolAck = OAI_VIAL ? vialProtocolProbe() : null;
+
+  function vialDefaultKeycode() {
+    const before = rawFrames.length;
+    const request = Buffer.alloc(OAI_REPORT_BYTES);
+    request[0] = 0x04; // VIA dynamic_keymap_get_keycode
+    request[1] = 0;    // layer 0
+    request[2] = 0;    // row 0
+    request[3] = 0;    // column 0
+    sendRaw(request);
+    runForMicros(250000);
+    const response = rawFrames.slice(before).find((frame) => frame.length === OAI_REPORT_BYTES && frame[0] === 0x04);
+    return response ? (response[4] << 8) | response[5] : null;
+  }
+
+  const vialDefaultK00 = OAI_VIAL ? vialDefaultKeycode() : null;
 
   function rpc(json, ack) {
     const before = rawFrames.length;
@@ -406,7 +455,7 @@ function main() {
   runForMicros(150000);
   mcu.gpio[12].setInputValue(true);
   runForMicros(150000);
-  const keyFrame = rawFrames.slice(beforeKey).map(readOaiFrame).find((json) => json === '{"method":"v.oai.hid","params":{"k":"AG00","act":1}}\r\n');
+  const keyFrame = readOaiMessages(rawFrames.slice(beforeKey)).find((json) => json === '{"method":"v.oai.hid","params":{"k":"AG00","act":1}}\r\n');
 
   const vid = deviceDescriptor.length >= 12 ? deviceDescriptor.readUInt16LE(8) : 0;
   const pid = deviceDescriptor.length >= 12 ? deviceDescriptor.readUInt16LE(10) : 0;
@@ -425,6 +474,8 @@ function main() {
     keyboard_interface: { number: keyboard.number, in_endpoint: keyboard.inEp, in_bytes: keyboard.inBytes },
     interface: { number: raw.number, in_endpoint: raw.inEp, out_endpoint: raw.outEp, in_bytes: raw.inBytes, out_bytes: raw.outBytes },
     descriptor_verified: descriptorOk && reportDescriptorRequested,
+    vial_protocol_ack: vialProtocolAck,
+    vial_default_k00: vialDefaultK00,
     rgbcfg_ack: rgbcfgAck,
     thstatus_ack: thstatusAck,
     device_status_ack: deviceStatusAck,
@@ -440,10 +491,11 @@ function main() {
   console.log(JSON.stringify(evidence));
 
   const checks = [
-    evidence.vid_pid === '303a:8360', evidence.descriptor_verified,
+    evidence.vid_pid === OAI_EXPECTED_VID_PID, evidence.descriptor_verified,
     evidence.keyboard_hid_enumerated, evidence.oai_hid_enumerated,
     evidence.rgbcfg_ack, evidence.thstatus_ack, evidence.device_status_ack,
     evidence.task_status_fragment_count > 1, evidence.key_event !== null, evidence.ws2812_activity,
+    !OAI_VIAL || evidence.vial_protocol_ack,
   ];
   if (!checks.every(Boolean)) throw new Error(`OAI smoke failed; evidence written to ${evidencePath}`);
   // rp2040js may leave a scheduling timer alive after the synchronous smoke;
@@ -451,7 +503,7 @@ function main() {
   process.exit(0);
 }
 
-module.exports = { oaiReport, oaiReports, keyboardHid };
+module.exports = { main, oaiReport, oaiReports, keyboardHid, readOaiMessages };
 
 if (require.main === module) {
   try {

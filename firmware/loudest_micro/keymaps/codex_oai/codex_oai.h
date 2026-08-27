@@ -13,11 +13,20 @@
 #    define CODEX_OAI_KEEP
 #endif
 
-#define OAI_REPORT_SIZE 64
-#define OAI_REPORT_ID 6
+#if defined(CODEX_OAI_VIAL)
+#    ifndef OAI_VIAL_FRAME_PREFIX
+#        error "CODEX_OAI_VIAL requires OAI_VIAL_FRAME_PREFIX"
+#    endif
+#    define OAI_REPORT_SIZE 32
+#    define OAI_FRAME_PREFIX OAI_VIAL_FRAME_PREFIX
+#else
+#    define OAI_REPORT_SIZE 64
+#    define OAI_REPORT_ID 6
+#    define OAI_FRAME_PREFIX OAI_REPORT_ID
+#endif
 #define OAI_CHANNEL_DEBUG 1
 #define OAI_CHANNEL_RPC 2
-#define OAI_MAX_PAYLOAD 61
+#define OAI_MAX_PAYLOAD (OAI_REPORT_SIZE - 3)
 #define OAI_RX_CAPACITY 512
 #define OAI_MAX_JSON_DEPTH 8
 #ifndef OAI_SLOT_COUNT
@@ -104,4 +113,8 @@ bool codex_oai_keymap_set(const uint8_t input[OAI_KEYMAP_POSITION_COUNT]);
 bool codex_oai_keymap_get_hex(char output[OAI_KEYMAP_POSITION_COUNT + 1]);
 bool codex_oai_keymap_set_hex(const char *input, size_t length);
 uint8_t codex_oai_keymap_action_for_position(uint8_t position);
+#if defined(CODEX_OAI_VIAL)
+CODEX_OAI_KEEP bool codex_oai_vial_command(uint8_t *data, uint8_t length);
+#else
 CODEX_OAI_KEEP void raw_hid_receive(uint8_t *data, uint8_t length);
+#endif

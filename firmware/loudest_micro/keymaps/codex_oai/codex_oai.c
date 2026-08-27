@@ -13,11 +13,11 @@
 #endif
 
 #if !defined(RAW_EPSIZE) || RAW_EPSIZE != OAI_REPORT_SIZE
-#    error "The OAI probe requires a 64-byte Raw HID endpoint"
+#    error "The selected OAI transport requires a matching Raw HID endpoint"
 #endif
 
-#if !defined(RAW_REPORT_ID) || RAW_REPORT_ID != OAI_REPORT_ID
-#    error "The OAI probe requires HID Report ID 6"
+#if !defined(CODEX_OAI_VIAL) && (!defined(RAW_REPORT_ID) || RAW_REPORT_ID != OAI_REPORT_ID)
+#    error "The Direct OAI probe requires HID Report ID 6"
 #endif
 
 typedef struct {
@@ -73,6 +73,10 @@ static uint8_t  error_revision;
 static uint8_t  handshake_revision;
 static bool     last_event_was_error;
 static oai_slot_t slots[OAI_SLOT_COUNT];
+
+#define OAI_TX_MESSAGE_CAPACITY 96U
+
+#if !defined(CODEX_OAI_VIAL)
 static uint8_t  oai_keymap[OAI_KEYMAP_POSITION_COUNT];
 
 static const uint8_t default_oai_keymap[OAI_KEYMAP_POSITION_COUNT] = {
@@ -135,6 +139,7 @@ typedef struct {
     uint8_t map[OAI_KEYMAP_POSITION_COUNT];
     uint8_t checksum;
 } oai_keymap_store_t;
+#endif
 
 static bool is_space(char value) {
     return value == ' ' || value == '\t' || value == '\r' || value == '\n';
@@ -147,6 +152,7 @@ static int8_t hex_digit_value(unsigned char value) {
     return -1;
 }
 
+#if !defined(CODEX_OAI_VIAL)
 static char hex_digit(uint8_t value) {
     return value < 10U ? (char)('0' + value) : (char)('a' + value - 10U);
 }
@@ -227,30 +233,6 @@ static void keymap_load(void) {
 #endif
 }
 
-static void reset_rx(void) {
-    rx_length = 0;
-    container_depth = 0;
-    collecting = false;
-    in_string = false;
-    escaped = false;
-    invalid_object = false;
-    overflowed = false;
-}
-
-void codex_oai_init(void) {
-    memset(rx_buffer, 0, sizeof(rx_buffer));
-    memset(container_stack, 0, sizeof(container_stack));
-    memset(slots, 0, sizeof(slots));
-    reset_rx();
-    saw_rgbcfg = false;
-    saw_thstatus = false;
-    state_revision = 0;
-    error_revision = 0;
-    handshake_revision = 0;
-    last_event_was_error = false;
-    keymap_load();
-}
-
 void codex_oai_reset_keymap(void) {
     keymap_defaults();
     keymap_persist();
@@ -314,6 +296,61 @@ uint8_t codex_oai_keymap_action_for_position(uint8_t position) {
         return OAI_KEYMAP_NOOP;
     }
     return oai_keymap[position];
+}
+#else
+void codex_oai_reset_keymap(void) {}
+
+bool codex_oai_keymap_get(uint8_t output[OAI_KEYMAP_POSITION_COUNT]) {
+    (void)output;
+    return false;
+}
+
+bool codex_oai_keymap_set(const uint8_t input[OAI_KEYMAP_POSITION_COUNT]) {
+    (void)input;
+    return false;
+}
+
+bool codex_oai_keymap_get_hex(char output[OAI_KEYMAP_POSITION_COUNT + 1]) {
+    (void)output;
+    return false;
+}
+
+bool codex_oai_keymap_set_hex(const char *input, size_t length) {
+    (void)input;
+    (void)length;
+    return false;
+}
+
+uint8_t codex_oai_keymap_action_for_position(uint8_t position) {
+    (void)position;
+    return OAI_KEYMAP_NOOP;
+}
+#endif
+
+static void reset_rx(void) {
+    rx_length = 0;
+    container_depth = 0;
+    collecting = false;
+    in_string = false;
+    escaped = false;
+    invalid_object = false;
+    overflowed = false;
+}
+
+void codex_oai_init(void) {
+    memset(rx_buffer, 0, sizeof(rx_buffer));
+    memset(container_stack, 0, sizeof(container_stack));
+    memset(slots, 0, sizeof(slots));
+    reset_rx();
+    saw_rgbcfg = false;
+    saw_thstatus = false;
+    state_revision = 0;
+    error_revision = 0;
+    handshake_revision = 0;
+    last_event_was_error = false;
+#if !defined(CODEX_OAI_VIAL)
+    keymap_load();
+#endif
 }
 
 bool codex_oai_ready(void) {
@@ -912,6 +949,7 @@ static bool parse_thstatus_params(const char *input, size_t start, size_t end) {
     return true;
 }
 
+#if !defined(CODEX_OAI_VIAL)
 static bool parse_keymap_params(
     const char *input,
     size_t start,
@@ -970,6 +1008,7 @@ static bool parse_keymap_params(
     cursor = skip_space(input, end, cursor);
     return cursor == end && has_layer && has_map == require_map;
 }
+#endif
 
 static bool parse_request(
     const char *input,
@@ -1059,57 +1098,70 @@ static bool parse_request(
 }
 
 static uint8_t append_text(
-    uint8_t report[OAI_REPORT_SIZE],
+    uint8_t message[OAI_TX_MESSAGE_CAPACITY],
     uint8_t offset,
     const char *text
 ) {
-    while (*text != '\0' && offset < OAI_REPORT_SIZE) {
-        report[offset++] = (uint8_t)*text++;
+    while (*text != '\0' && offset < OAI_TX_MESSAGE_CAPACITY) {
+        message[offset++] = (uint8_t)*text++;
     }
     return offset;
 }
 
 static uint8_t append_id(
-    uint8_t report[OAI_REPORT_SIZE],
+    uint8_t message[OAI_TX_MESSAGE_CAPACITY],
     uint8_t offset,
     uint16_t id
 ) {
     if (id >= 100) {
-        report[offset++] = (uint8_t)('0' + id / 100);
+        message[offset++] = (uint8_t)('0' + id / 100);
         id %= 100;
-        report[offset++] = (uint8_t)('0' + id / 10);
+        message[offset++] = (uint8_t)('0' + id / 10);
     } else if (id >= 10) {
-        report[offset++] = (uint8_t)('0' + id / 10);
+        message[offset++] = (uint8_t)('0' + id / 10);
     }
-    report[offset++] = (uint8_t)('0' + id % 10);
+    message[offset++] = (uint8_t)('0' + id % 10);
     return offset;
 }
 
-static void send_response(const char *prefix, uint16_t id) {
-    uint8_t report[OAI_REPORT_SIZE] = {0};
-    uint8_t offset = 3;
-    report[0] = OAI_REPORT_ID;
-    report[1] = OAI_CHANNEL_RPC;
-    offset = append_text(report, offset, prefix);
-    offset = append_id(report, offset, id);
-    offset = append_text(report, offset, "}\r\n");
-    report[2] = (uint8_t)(offset - 3);
-    raw_hid_send(report, OAI_REPORT_SIZE);
+static void send_rpc_message(const uint8_t *message, uint8_t length) {
+    uint8_t offset = 0;
+    do {
+        uint8_t report[OAI_REPORT_SIZE] = {0};
+        uint8_t chunk = (uint8_t)(length - offset);
+        if (chunk > OAI_MAX_PAYLOAD) {
+            chunk = OAI_MAX_PAYLOAD;
+        }
+        report[0] = OAI_FRAME_PREFIX;
+        report[1] = OAI_CHANNEL_RPC;
+        report[2] = chunk;
+        memcpy(report + 3, message + offset, chunk);
+        raw_hid_send(report, OAI_REPORT_SIZE);
+        offset = (uint8_t)(offset + chunk);
+    } while (offset < length);
 }
 
-static void send_keymap_get_response(uint16_t id, const char map[OAI_KEYMAP_POSITION_COUNT + 1]) {
-    uint8_t report[OAI_REPORT_SIZE] = {0};
-    uint8_t offset = 3;
-    report[0] = OAI_REPORT_ID;
-    report[1] = OAI_CHANNEL_RPC;
-    offset = append_text(report, offset, "{\"result\":{\"l\":0,\"m\":\"");
-    offset = append_text(report, offset, map);
-    offset = append_text(report, offset, "\"},\"id\":");
-    offset = append_id(report, offset, id);
-    offset = append_text(report, offset, "}\r\n");
-    report[2] = (uint8_t)(offset - 3);
-    raw_hid_send(report, OAI_REPORT_SIZE);
+static void send_response(const char *prefix, uint16_t id) {
+    uint8_t message[OAI_TX_MESSAGE_CAPACITY] = {0};
+    uint8_t offset = 0;
+    offset = append_text(message, offset, prefix);
+    offset = append_id(message, offset, id);
+    offset = append_text(message, offset, "}\r\n");
+    send_rpc_message(message, offset);
 }
+
+#if !defined(CODEX_OAI_VIAL)
+static void send_keymap_get_response(uint16_t id, const char map[OAI_KEYMAP_POSITION_COUNT + 1]) {
+    uint8_t message[OAI_TX_MESSAGE_CAPACITY] = {0};
+    uint8_t offset = 0;
+    offset = append_text(message, offset, "{\"result\":{\"l\":0,\"m\":\"");
+    offset = append_text(message, offset, map);
+    offset = append_text(message, offset, "\"},\"id\":");
+    offset = append_id(message, offset, id);
+    offset = append_text(message, offset, "}\r\n");
+    send_rpc_message(message, offset);
+}
+#endif
 
 static bool dispatch_request(const char *input, size_t length) {
     oai_request_t request;
@@ -1131,7 +1183,9 @@ static bool dispatch_request(const char *input, size_t length) {
         }
     } else if (strcmp(request.method, "device.status") == 0) {
         send_response("{\"result\":{},\"id\":", request.id);
-    } else if (strcmp(request.method, "v.oai.keymap.get") == 0) {
+    }
+#if !defined(CODEX_OAI_VIAL)
+    else if (strcmp(request.method, "v.oai.keymap.get") == 0) {
         uint32_t layer = 0;
         char map[OAI_KEYMAP_POSITION_COUNT + 1];
         if (!parse_keymap_params(input, request.params_start, request.params_end, false, &layer, map)) {
@@ -1154,6 +1208,7 @@ static bool dispatch_request(const char *input, size_t length) {
         }
         send_response("{\"result\":true,\"id\":", request.id);
     }
+#endif
     return true;
 }
 
@@ -1235,33 +1290,49 @@ static void feed_rpc_byte(char value) {
     }
 }
 
-void raw_hid_receive(uint8_t *data, uint8_t length) {
+static bool oai_frame_is_valid(const uint8_t *data, uint8_t length) {
     if (
         data == NULL
         || length != OAI_REPORT_SIZE
-        || data[0] != OAI_REPORT_ID
+        || data[0] != OAI_FRAME_PREFIX
         || data[2] > OAI_MAX_PAYLOAD
     ) {
-        note_error();
-        return;
+        return false;
     }
     for (uint8_t index = (uint8_t)(3 + data[2]); index < OAI_REPORT_SIZE; ++index) {
         if (data[index] != 0) {
-            note_error();
-            return;
+            return false;
         }
     }
-    if (data[1] == OAI_CHANNEL_DEBUG) {
+    return data[1] == OAI_CHANNEL_DEBUG || data[1] == OAI_CHANNEL_RPC;
+}
+
+static void oai_receive_frame(uint8_t *data, uint8_t length) {
+    if (!oai_frame_is_valid(data, length)) {
+        note_error();
         return;
     }
-    if (data[1] != OAI_CHANNEL_RPC) {
-        note_error();
+    if (data[1] == OAI_CHANNEL_DEBUG) {
         return;
     }
     for (uint8_t index = 0; index < data[2]; ++index) {
         feed_rpc_byte((char)data[3 + index]);
     }
 }
+
+#if defined(CODEX_OAI_VIAL)
+CODEX_OAI_KEEP bool codex_oai_vial_command(uint8_t *data, uint8_t length) {
+    if (!oai_frame_is_valid(data, length)) {
+        return false;
+    }
+    oai_receive_frame(data, length);
+    return true;
+}
+#else
+CODEX_OAI_KEEP void raw_hid_receive(uint8_t *data, uint8_t length) {
+    oai_receive_frame(data, length);
+}
+#endif
 
 static const char *control_name(codex_oai_control_t control) {
     switch (control) {
@@ -1324,20 +1395,17 @@ bool codex_oai_notify(codex_oai_control_t control, bool pressed) {
         action = 2;
     }
 
-    uint8_t report[OAI_REPORT_SIZE] = {0};
-    uint8_t offset = 3;
-    report[0] = OAI_REPORT_ID;
-    report[1] = OAI_CHANNEL_RPC;
+    uint8_t message[OAI_TX_MESSAGE_CAPACITY] = {0};
+    uint8_t offset = 0;
     offset = append_text(
-        report,
+        message,
         offset,
         "{\"method\":\"v.oai.hid\",\"params\":{\"k\":\""
     );
-    offset = append_text(report, offset, name);
-    offset = append_text(report, offset, "\",\"act\":");
-    report[offset++] = (uint8_t)('0' + action);
-    offset = append_text(report, offset, "}}\r\n");
-    report[2] = (uint8_t)(offset - 3);
-    raw_hid_send(report, OAI_REPORT_SIZE);
+    offset = append_text(message, offset, name);
+    offset = append_text(message, offset, "\",\"act\":");
+    message[offset++] = (uint8_t)('0' + action);
+    offset = append_text(message, offset, "}}\r\n");
+    send_rpc_message(message, offset);
     return true;
 }

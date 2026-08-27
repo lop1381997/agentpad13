@@ -54,6 +54,18 @@ stick parts. The reasoning and the measurements are in [`release/RELEASE.md`](re
 - **Firmware — validated.** Emulator-booted and protocol-conformant. Flash `agentpad13.uf2`.
 - **Configurator — live.** Static files: no build step, no network calls, no dependencies.
 
+### AgentPad13 Vial OAI (Phase 3)
+
+`loudest_micro:vial_oai` is the separate Phase-3 firmware: it keeps Vial's
+normal configuration flow, exposes eight editable layers and reserves a small
+OAI channel for the future native AgentPad13 application. Its candidate is
+[`agentpad13_vial_oai.uf2`](release/firmware/prebuilt/agentpad13_vial_oai.uf2),
+124,416 bytes, SHA-256
+`848e7249a3ccae3dcf8a52a25bbc1493de358f6b3c24bdb1c19aa7c8fdc49aef`.
+The [build guide](firmware/BUILD.md#agentpad13-vial-oai-phase-3-firmware-foundation)
+explains the Vial/OAI boundary; physical validation remains pending in its
+[runbook](docs/vial-oai-physical-runbook.md).
+
 ### AgentPad13 Direct OAI (experimental alternative)
 
 The isolated `codex_oai` keymap is an experimental alternative for direct
@@ -65,7 +77,7 @@ ID 6, 64-byte reports).
 
 The current unflashed candidate is
 `release/firmware/prebuilt/agentpad13_codex_oai.uf2`, 93,696 bytes, SHA-256
-`fcb50b2419419be43b7cf90b00a96b16063fcaf182bc24b9642d57e2e8adf54d`.
+`a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
 Start with the [keymap contract](firmware/loudest_micro/keymaps/codex_oai/README.md),
 [source hand-off](firmware/CODEX-OAI-SOURCE.md), and
 [Direct OAI build procedure](firmware/BUILD.md#agentpad13-direct-oai-experimental-alternative).

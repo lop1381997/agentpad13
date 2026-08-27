@@ -130,6 +130,11 @@ class BuildToolSafetyTest(unittest.TestCase):
             builder.OAI_ARTIFACT,
             REPO / "release" / "firmware" / "prebuilt" / "agentpad13_codex_oai.uf2",
         )
+        self.assertEqual(
+            builder.VIAL_OAI_ARTIFACT,
+            REPO / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2",
+        )
+        self.assertEqual(builder.KEYMAPS, ("default", "vial", "codex_oai", "vial_oai"))
 
     def test_descriptor_patch_is_repository_owned_and_complete(self) -> None:
         patch = REPO / "firmware" / "patches" / "0002-raw-hid-report-id-chibios.patch"

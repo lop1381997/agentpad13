@@ -371,6 +371,7 @@ static bool handle_oai_control(codex_oai_control_t control, bool pressed, uint8_
     return notify_or_native(control, pressed);
 }
 
+#if !defined(CODEX_OAI_VIAL)
 static int8_t codex_oai_position_for_keycode(uint16_t keycode, const keyrecord_t *record) {
     uint8_t row = record == NULL ? 0U : record->event.key.row;
     uint8_t col = record == NULL ? 0U : record->event.key.col;
@@ -415,6 +416,7 @@ static bool codex_oai_control_for_action(uint8_t action, codex_oai_control_t *co
     }
     return true;
 }
+#endif
 
 static uint8_t codex_oai_feedback_led(uint8_t position) {
     /* The first six physical keys own task-state LEDs.  Feedback follows the
@@ -426,6 +428,7 @@ static uint8_t codex_oai_feedback_led(uint8_t position) {
     return position;
 }
 
+#if !defined(CODEX_OAI_VIAL)
 static bool handle_dynamic_oai_position(uint8_t position, keyrecord_t *record) {
     bool pressed = record->event.pressed;
     uint8_t action = codex_oai_keymap_action_for_position(position);
@@ -463,10 +466,87 @@ static bool handle_dynamic_oai_position(uint8_t position, keyrecord_t *record) {
     }
     return handle_oai_control(control, pressed, codex_oai_feedback_led(position));
 }
+#endif
+
+#if defined(CODEX_OAI_VIAL)
+static int8_t codex_oai_physical_position(const keyrecord_t *record) {
+    if (record == NULL) {
+        return -1;
+    }
+    uint8_t row = record->event.key.row;
+    uint8_t col = record->event.key.col;
+    if (row < 3U && col < 4U) {
+        return (int8_t)(row * 4U + col);
+    }
+    return row == 3U && col == 2U ? 12 : -1;
+}
+
+static bool handle_vial_accept(keyrecord_t *record, uint8_t feedback_led) {
+    bool pressed = record->event.pressed;
+    if (pressed) {
+        accept_timer = timer_read32();
+        if (feedback_led != 0U) {
+            codex_led_note_action(feedback_led, true, timer_read32());
+        }
+        if (codex_oai_ready()) {
+            (void)codex_oai_notify(OAI_CONTROL_ACT10, true);
+        }
+    } else if (codex_oai_ready()) {
+        if (feedback_led != 0U) {
+            codex_led_note_action(feedback_led, false, timer_read32());
+        }
+        (void)codex_oai_notify(OAI_CONTROL_ACT10, false);
+    } else if (codex_armed || timer_elapsed32(accept_timer) >= CX_ACCEPT_TERM) {
+        native_action(CX_ACTION_ACCEPT);
+    }
+    return false;
+}
+
+static bool handle_vial_oai_keycode(uint16_t keycode, keyrecord_t *record) {
+    codex_oai_control_t control;
+    int8_t physical_position = codex_oai_physical_position(record);
+    uint8_t feedback_led = physical_position < 0 ? 0U : codex_oai_feedback_led((uint8_t)physical_position);
+
+    switch (keycode) {
+        case OAI_AG00: control = OAI_CONTROL_AG00; break;
+        case OAI_AG01: control = OAI_CONTROL_AG01; break;
+        case OAI_AG02: control = OAI_CONTROL_AG02; break;
+        case OAI_AG03: control = OAI_CONTROL_AG03; break;
+        case OAI_AG04: control = OAI_CONTROL_AG04; break;
+        case OAI_AG05: control = OAI_CONTROL_AG05; break;
+        case OAI_ACT06: control = OAI_CONTROL_ACT06; break;
+        case OAI_ACT07: control = OAI_CONTROL_ACT07; break;
+        case OAI_ACT08: control = OAI_CONTROL_ACT08; break;
+        case OAI_ACT09: control = OAI_CONTROL_ACT09; break;
+        case OAI_ACT10: return handle_vial_accept(record, feedback_led);
+        case OAI_ACT11: control = OAI_CONTROL_ACT11; break;
+        case OAI_ACT12: control = OAI_CONTROL_ACT12; break;
+        case OAI_MICROPHONE: control = OAI_CONTROL_ACT10; break;
+        case OAI_ENC:
+            (void)notify_encoder_press(record->event.pressed);
+            return false;
+        case OAI_ENC_CW:
+            if (codex_oai_ready()) {
+                (void)codex_oai_notify(OAI_CONTROL_ENCODER_CW, true);
+            }
+            return false;
+        case OAI_ENC_CCW:
+            if (codex_oai_ready()) {
+                (void)codex_oai_notify(OAI_CONTROL_ENCODER_CCW, true);
+            }
+            return false;
+        default:
+            return true;
+    }
+    return handle_oai_control(control, record->event.pressed, feedback_led);
+}
+#endif
 
 void eeconfig_init_user(void) {
     eeconfig_update_user(0);
+#if !defined(CODEX_OAI_VIAL)
     codex_oai_reset_keymap();
+#endif
 }
 
 void keyboard_post_init_user(void) {
@@ -500,11 +580,17 @@ void matrix_scan_user(void) {
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     bool pressed = record->event.pressed;
+#if defined(CODEX_OAI_VIAL)
+    if (!handle_vial_oai_keycode(keycode, record)) {
+        return false;
+    }
+#else
     int8_t oai_position = codex_oai_position_for_keycode(keycode, record);
 
     if (oai_position >= 0) {
         return handle_dynamic_oai_position((uint8_t)oai_position, record);
     }
+#endif
 
     switch (keycode) {
         case CODEX_TOUCH_LAYER:

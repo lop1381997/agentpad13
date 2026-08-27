@@ -1,0 +1,47 @@
+{
+  "elf_sha256": "758da9380994b43499d9372cbc353b31e9b356c1e826472cb6cc046ecafb670d",
+  "elf_size": {
+    "bss": 265336,
+    "data": 0,
+    "text": 62160
+  },
+  "elf_uf2_equivalence": {
+    "elf_binary_size_bytes": 62160,
+    "flash_base": "0x10000000",
+    "status": "pass",
+    "trailing_zero_padding_bytes": 48,
+    "uf2_flash_size_bytes": 62208
+  },
+  "emulator_evidence": {
+    "descriptor_verified": true,
+    "device_status_ack": true,
+    "key_event": {
+      "act": 1,
+      "k": "AG00"
+    },
+    "keyboard_hid_enumerated": true,
+    "oai_hid_enumerated": true,
+    "rgbcfg_ack": true,
+    "task_status_fragment_count": 3,
+    "thstatus_ack": true,
+    "uf2_sha256": "848e7249a3ccae3dcf8a52a25bbc1493de358f6b3c24bdb1c19aa7c8fdc49aef",
+    "uf2_size_bytes": 124416,
+    "usb_enumerated": true,
+    "vial_default_k00": 32258,
+    "vial_protocol_ack": true,
+    "ws2812_activity": true
+  },
+  "report_bytes": 32,
+  "report_id": null,
+  "required_symbols": [
+    "codex_led_render",
+    "codex_oai_notify",
+    "codex_oai_vial_command"
+  ],
+  "sha256": "848e7249a3ccae3dcf8a52a25bbc1493de358f6b3c24bdb1c19aa7c8fdc49aef",
+  "size_bytes": 124416,
+  "status": "pass",
+  "target": "loudest_micro:vial_oai",
+  "usage": "ff60:0061",
+  "vid_pid": "feed:4c4d"
+}

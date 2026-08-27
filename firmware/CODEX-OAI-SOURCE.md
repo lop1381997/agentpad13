@@ -37,6 +37,7 @@ disposable QMK worktree. From the repository root:
 ```sh
 python3 firmware/tools/build_codex_oai.py --help
 python3 firmware/tools/verify_codex_oai_artifact.py \
+  --profile direct \
   --uf2 release/firmware/prebuilt/agentpad13_codex_oai.uf2 \
   --elf /path/to/pinned-vial-qmk/.build/loudest_micro_codex_oai.elf \
   --emulator-evidence firmware/evidence/codex-oai-emulator.json \
@@ -51,7 +52,7 @@ physical flash is implied or performed by this source hand-off.
 
 - file: `release/firmware/prebuilt/agentpad13_codex_oai.uf2`
 - size: `93,696` bytes
-- SHA-256: `fcb50b2419419be43b7cf90b00a96b16063fcaf182bc24b9642d57e2e8adf54d`
+- SHA-256: `a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`
 
 The artifact is bound to the current emulator capture and manifest under
 [`evidence/`](evidence/). Physical keyboard verification remains a separate,
