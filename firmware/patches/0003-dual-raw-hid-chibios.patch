@@ -1,0 +1,405 @@
+diff --git a/quantum/main.c b/quantum/main.c
+index 3159c55850..7796c0d535 100644
+--- a/quantum/main.c
++++ b/quantum/main.c
+@@ -55,6 +55,11 @@ int main(void) {
+         raw_hid_task();
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++        void oai_raw_hid_task(void);
++        oai_raw_hid_task();
++#endif
++
+ #ifdef CONSOLE_ENABLE
+         void console_task(void);
+         console_task();
+diff --git a/quantum/raw_hid.c b/quantum/raw_hid.c
+index 2c7a75f325..9ce3c8c2b9 100644
+--- a/quantum/raw_hid.c
++++ b/quantum/raw_hid.c
+@@ -13,3 +13,15 @@ __attribute__((weak)) void raw_hid_receive(uint8_t *data, uint8_t length) {
+     // and implement this function there. Leave this as weak linkage
+     // so users can opt to not handle data coming in.
+ }
++
++#ifdef OAI_RAW_HID_ENABLE
++void oai_raw_hid_send(uint8_t *data, uint8_t length) {
++    host_oai_raw_hid_send(data, length);
++}
++
++__attribute__((weak)) void oai_raw_hid_receive(uint8_t *data, uint8_t length) {
++    // Users should #include "raw_hid.h" in their own code
++    // and implement this function there. Leave this as weak linkage
++    // so users can opt to not handle data coming in.
++}
++#endif
+diff --git a/quantum/raw_hid.h b/quantum/raw_hid.h
+index 16830833cc..6b55075847 100644
+--- a/quantum/raw_hid.h
++++ b/quantum/raw_hid.h
+@@ -28,4 +28,10 @@ void raw_hid_receive(uint8_t *data, uint8_t length);
+  */
+ void raw_hid_send(uint8_t *data, uint8_t length);
+ 
++#ifdef OAI_RAW_HID_ENABLE
++void oai_raw_hid_receive(uint8_t *data, uint8_t length);
++void oai_raw_hid_send(uint8_t *data, uint8_t length);
++void oai_raw_hid_task(void);
++#endif
++
+ /** \} */
+diff --git a/tmk_core/protocol/chibios/usb_endpoints.c b/tmk_core/protocol/chibios/usb_endpoints.c
+index 856df62426..2b4d2032c2 100644
+--- a/tmk_core/protocol/chibios/usb_endpoints.c
++++ b/tmk_core/protocol/chibios/usb_endpoints.c
+@@ -80,6 +80,14 @@ usb_endpoint_in_t usb_endpoints_in[USB_ENDPOINT_IN_COUNT] = {
+ #    endif
+ #endif
+ 
++#if defined(OAI_RAW_HID_ENABLE)
++#    if defined(USB_ENDPOINTS_ARE_REORDERABLE)
++    [USB_ENDPOINT_IN_OAI_RAW] = QMK_USB_ENDPOINT_IN_SHARED(USB_EP_MODE_TYPE_INTR, OAI_RAW_EPSIZE, OAI_RAW_IN_EPNUM, OAI_RAW_IN_CAPACITY, NULL, QMK_USB_REPORT_STORAGE_DEFAULT(OAI_RAW_EPSIZE)),
++#    else
++    [USB_ENDPOINT_IN_OAI_RAW] = QMK_USB_ENDPOINT_IN(USB_EP_MODE_TYPE_INTR, OAI_RAW_EPSIZE, OAI_RAW_IN_EPNUM, OAI_RAW_IN_CAPACITY, NULL, QMK_USB_REPORT_STORAGE_DEFAULT(OAI_RAW_EPSIZE)),
++#    endif
++#endif
++
+ #if defined(MIDI_ENABLE)
+ #    if defined(USB_ENDPOINTS_ARE_REORDERABLE)
+     [USB_ENDPOINT_IN_MIDI] = QMK_USB_ENDPOINT_IN_SHARED(USB_EP_MODE_TYPE_BULK, MIDI_STREAM_EPSIZE, MIDI_STREAM_IN_EPNUM, MIDI_STREAM_IN_CAPACITY, NULL, NULL),
+@@ -107,6 +115,10 @@ usb_endpoint_in_lut_t usb_endpoint_interface_lut[TOTAL_INTERFACES] = {
+     [RAW_INTERFACE] = USB_ENDPOINT_IN_RAW,
+ #endif
+ 
++#if defined(OAI_RAW_HID_ENABLE)
++    [OAI_RAW_INTERFACE] = USB_ENDPOINT_IN_OAI_RAW,
++#endif
++
+ #if defined(MOUSE_ENABLE) && !defined(MOUSE_SHARED_EP)
+     [MOUSE_INTERFACE] = USB_ENDPOINT_IN_MOUSE,
+ #endif
+@@ -142,6 +154,10 @@ usb_endpoint_out_t usb_endpoints_out[USB_ENDPOINT_OUT_COUNT] = {
+     [USB_ENDPOINT_OUT_RAW] = QMK_USB_ENDPOINT_OUT(USB_EP_MODE_TYPE_INTR, RAW_EPSIZE, RAW_OUT_EPNUM, RAW_OUT_CAPACITY),
+ #endif
+ 
++#if defined(OAI_RAW_HID_ENABLE)
++    [USB_ENDPOINT_OUT_OAI_RAW] = QMK_USB_ENDPOINT_OUT(USB_EP_MODE_TYPE_INTR, OAI_RAW_EPSIZE, OAI_RAW_OUT_EPNUM, OAI_RAW_OUT_CAPACITY),
++#endif
++
+ #if defined(MIDI_ENABLE)
+     [USB_ENDPOINT_OUT_MIDI] = QMK_USB_ENDPOINT_OUT(USB_EP_MODE_TYPE_BULK, MIDI_STREAM_EPSIZE, MIDI_STREAM_OUT_EPNUM, MIDI_STREAM_OUT_CAPACITY),
+ #endif
+diff --git a/tmk_core/protocol/chibios/usb_endpoints.h b/tmk_core/protocol/chibios/usb_endpoints.h
+index 9fad83726e..51d766807f 100644
+--- a/tmk_core/protocol/chibios/usb_endpoints.h
++++ b/tmk_core/protocol/chibios/usb_endpoints.h
+@@ -43,6 +43,14 @@
+ #    define RAW_OUT_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
+ #endif
+ 
++#if !defined(OAI_RAW_IN_CAPACITY)
++#    define OAI_RAW_IN_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
++#endif
++
++#if !defined(OAI_RAW_OUT_CAPACITY)
++#    define OAI_RAW_OUT_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
++#endif
++
+ #if !defined(MIDI_STREAM_IN_CAPACITY)
+ #    define MIDI_STREAM_IN_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
+ #endif
+@@ -90,6 +98,10 @@ typedef enum {
+     USB_ENDPOINT_IN_RAW,
+ #endif
+ 
++#if defined(OAI_RAW_HID_ENABLE)
++    USB_ENDPOINT_IN_OAI_RAW,
++#endif
++
+ #if defined(MIDI_ENABLE)
+     USB_ENDPOINT_IN_MIDI,
+ #endif
+@@ -127,6 +139,9 @@ typedef enum {
+ #if defined(RAW_ENABLE)
+     USB_ENDPOINT_OUT_RAW,
+ #endif
++#if defined(OAI_RAW_HID_ENABLE)
++    USB_ENDPOINT_OUT_OAI_RAW,
++#endif
+ #if defined(MIDI_ENABLE)
+     USB_ENDPOINT_OUT_MIDI,
+ #endif
+diff --git a/tmk_core/protocol/chibios/usb_main.c b/tmk_core/protocol/chibios/usb_main.c
+index f9d7f5c4d6..ebe9f4b84c 100644
+--- a/tmk_core/protocol/chibios/usb_main.c
++++ b/tmk_core/protocol/chibios/usb_main.c
+@@ -32,7 +32,7 @@
+ #include "usb_driver.h"
+ #include "usb_types.h"
+ 
+-#ifdef RAW_ENABLE
++#if defined(RAW_ENABLE) || defined(OAI_RAW_HID_ENABLE)
+ #    include "raw_hid.h"
+ #endif
+ 
+@@ -535,6 +535,23 @@ void raw_hid_task(void) {
+ 
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++void send_oai_raw_hid(uint8_t *data, uint8_t length) {
++    if (length != OAI_RAW_EPSIZE) {
++        return;
++    }
++    send_report(USB_ENDPOINT_IN_OAI_RAW, data, length);
++}
++
++void oai_raw_hid_task(void) {
++    uint8_t buffer[OAI_RAW_EPSIZE];
++    while (receive_report(USB_ENDPOINT_OUT_OAI_RAW, buffer, sizeof(buffer))) {
++        oai_raw_hid_receive(buffer, sizeof(buffer));
++    }
++}
++
++#endif
++
+ #ifdef MIDI_ENABLE
+ 
+ void send_midi_packet(MIDI_EventPacket_t *event) {
+diff --git a/tmk_core/protocol/host.c b/tmk_core/protocol/host.c
+index 4874d7c1d3..2469cd3ceb 100644
+--- a/tmk_core/protocol/host.c
++++ b/tmk_core/protocol/host.c
+@@ -311,6 +311,14 @@ void host_raw_hid_send(uint8_t *data, uint8_t length) {
+ }
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++void send_oai_raw_hid(uint8_t *data, uint8_t length);
++
++void host_oai_raw_hid_send(uint8_t *data, uint8_t length) {
++    send_oai_raw_hid(data, length);
++}
++#endif
++
+ uint16_t host_last_system_usage(void) {
+     return last_system_usage;
+ }
+diff --git a/tmk_core/protocol/host.h b/tmk_core/protocol/host.h
+index a0b1e73dcc..dff42c5ed3 100644
+--- a/tmk_core/protocol/host.h
++++ b/tmk_core/protocol/host.h
+@@ -42,6 +42,9 @@ void    host_system_send(uint16_t usage);
+ void    host_consumer_send(uint16_t usage);
+ void    host_programmable_button_send(uint32_t data);
+ void    host_raw_hid_send(uint8_t *data, uint8_t length);
++#ifdef OAI_RAW_HID_ENABLE
++void    host_oai_raw_hid_send(uint8_t *data, uint8_t length);
++#endif
+ 
+ uint16_t host_last_system_usage(void);
+ uint16_t host_last_consumer_usage(void);
+diff --git a/tmk_core/protocol/usb_descriptor.c b/tmk_core/protocol/usb_descriptor.c
+index 445d5a41f7..49844c2ca8 100644
+--- a/tmk_core/protocol/usb_descriptor.c
++++ b/tmk_core/protocol/usb_descriptor.c
+@@ -476,6 +476,33 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM RawReport[] = {
+ };
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++const USB_Descriptor_HIDReport_Datatype_t PROGMEM OAI_RawReport[] = {
++    HID_RI_USAGE_PAGE(16, OAI_RAW_USAGE_PAGE), // Vendor Defined
++    HID_RI_USAGE(8, OAI_RAW_USAGE_ID),         // Vendor Defined
++    HID_RI_COLLECTION(8, 0x01),                // Application
++#    ifdef OAI_RAW_REPORT_ID
++        HID_RI_REPORT_ID(8, OAI_RAW_REPORT_ID),
++#    endif
++        // Data to host
++        HID_RI_USAGE(8, 0x62),
++        HID_RI_LOGICAL_MINIMUM(8, 0x00),
++        HID_RI_LOGICAL_MAXIMUM(16, 0x00FF),
++        HID_RI_REPORT_COUNT(8, OAI_RAW_REPORT_PAYLOAD_SIZE),
++        HID_RI_REPORT_SIZE(8, 0x08),
++        HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_ABSOLUTE),
++
++        // Data from host
++        HID_RI_USAGE(8, 0x63),
++        HID_RI_LOGICAL_MINIMUM(8, 0x00),
++        HID_RI_LOGICAL_MAXIMUM(16, 0x00FF),
++        HID_RI_REPORT_COUNT(8, OAI_RAW_REPORT_PAYLOAD_SIZE),
++        HID_RI_REPORT_SIZE(8, 0x08),
++        HID_RI_OUTPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_ABSOLUTE | HID_IOF_NON_VOLATILE),
++    HID_RI_END_COLLECTION(0),
++};
++#endif
++
+ #ifdef CONSOLE_ENABLE
+ const USB_Descriptor_HIDReport_Datatype_t PROGMEM ConsoleReport[] = {
+     HID_RI_USAGE_PAGE(16, 0xFF31), // Vendor Defined (PJRC Teensy compatible)
+@@ -641,6 +668,56 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
+     },
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++    /*
++     * OAI Raw HID
++     */
++    .OAI_Raw_Interface = {
++        .Header = {
++            .Size               = sizeof(USB_Descriptor_Interface_t),
++            .Type               = DTYPE_Interface
++        },
++        .InterfaceNumber        = OAI_RAW_INTERFACE,
++        .AlternateSetting       = 0x00,
++        .TotalEndpoints         = 2,
++        .Class                  = HID_CSCP_HIDClass,
++        .SubClass               = HID_CSCP_NonBootSubclass,
++        .Protocol               = HID_CSCP_NonBootProtocol,
++        .InterfaceStrIndex      = NO_DESCRIPTOR
++    },
++    .OAI_Raw_HID = {
++        .Header = {
++            .Size               = sizeof(USB_HID_Descriptor_HID_t),
++            .Type               = HID_DTYPE_HID
++        },
++        .HIDSpec                = VERSION_BCD(1, 1, 1),
++        .CountryCode            = 0x00,
++        .TotalReportDescriptors = 1,
++        .HIDReportType          = HID_DTYPE_Report,
++        .HIDReportLength        = sizeof(OAI_RawReport)
++    },
++    .OAI_Raw_INEndpoint = {
++        .Header = {
++            .Size               = sizeof(USB_Descriptor_Endpoint_t),
++            .Type               = DTYPE_Endpoint
++        },
++        .EndpointAddress        = (ENDPOINT_DIR_IN | OAI_RAW_IN_EPNUM),
++        .Attributes             = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
++        .EndpointSize           = OAI_RAW_EPSIZE,
++        .PollingIntervalMS      = 0x01
++    },
++    .OAI_Raw_OUTEndpoint = {
++        .Header = {
++            .Size               = sizeof(USB_Descriptor_Endpoint_t),
++            .Type               = DTYPE_Endpoint
++        },
++        .EndpointAddress        = (ENDPOINT_DIR_OUT | OAI_RAW_OUT_EPNUM),
++        .Attributes             = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
++        .EndpointSize           = OAI_RAW_EPSIZE,
++        .PollingIntervalMS      = 0x01
++    },
++#endif
++
+ #if defined(MOUSE_ENABLE) && !defined(MOUSE_SHARED_EP)
+     /*
+      * Mouse
+@@ -1283,6 +1360,14 @@ uint16_t get_usb_descriptor(const uint16_t wValue, const uint16_t wIndex, const
+                     break;
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++                case OAI_RAW_INTERFACE:
++                    Address = &ConfigurationDescriptor.OAI_Raw_HID;
++                    Size    = sizeof(USB_HID_Descriptor_HID_t);
++
++                    break;
++#endif
++
+ #ifdef CONSOLE_ENABLE
+                 case CONSOLE_INTERFACE:
+                     Address = &ConfigurationDescriptor.Console_HID;
+@@ -1340,6 +1425,14 @@ uint16_t get_usb_descriptor(const uint16_t wValue, const uint16_t wIndex, const
+                     break;
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++                case OAI_RAW_INTERFACE:
++                    Address = &OAI_RawReport;
++                    Size    = sizeof(OAI_RawReport);
++
++                    break;
++#endif
++
+ #ifdef CONSOLE_ENABLE
+                 case CONSOLE_INTERFACE:
+                     Address = &ConsoleReport;
+diff --git a/tmk_core/protocol/usb_descriptor.h b/tmk_core/protocol/usb_descriptor.h
+index afd9d58715..5a5e7e5f1a 100644
+--- a/tmk_core/protocol/usb_descriptor.h
++++ b/tmk_core/protocol/usb_descriptor.h
+@@ -78,6 +78,14 @@ typedef struct {
+     USB_Descriptor_Endpoint_t  Raw_OUTEndpoint;
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++    // OAI Raw HID Interface
++    USB_Descriptor_Interface_t OAI_Raw_Interface;
++    USB_HID_Descriptor_HID_t   OAI_Raw_HID;
++    USB_Descriptor_Endpoint_t  OAI_Raw_INEndpoint;
++    USB_Descriptor_Endpoint_t  OAI_Raw_OUTEndpoint;
++#endif
++
+ #if defined(MOUSE_ENABLE) && !defined(MOUSE_SHARED_EP)
+     // Mouse HID Interface
+     USB_Descriptor_Interface_t Mouse_Interface;
+@@ -164,6 +172,10 @@ enum usb_interfaces {
+     RAW_INTERFACE,
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++    OAI_RAW_INTERFACE,
++#endif
++
+ #if defined(MOUSE_ENABLE) && !defined(MOUSE_SHARED_EP)
+     MOUSE_INTERFACE,
+ #endif
+@@ -227,6 +239,15 @@ enum usb_endpoints {
+ #    endif
+ #endif
+ 
++#ifdef OAI_RAW_HID_ENABLE
++    OAI_RAW_IN_EPNUM = NEXT_EPNUM,
++#    ifdef USB_ENDPOINTS_ARE_REORDERABLE
++#        define OAI_RAW_OUT_EPNUM OAI_RAW_IN_EPNUM
++#    else
++    OAI_RAW_OUT_EPNUM = NEXT_EPNUM,
++#    endif
++#endif
++
+ #ifdef SHARED_EP_ENABLE
+     SHARED_IN_EPNUM = NEXT_EPNUM,
+ #endif
+@@ -303,6 +324,31 @@ enum usb_endpoints {
+ #if RAW_REPORT_PAYLOAD_SIZE < 1
+ #    error "Raw HID report payload must contain at least one byte"
+ #endif
++#ifdef OAI_RAW_HID_ENABLE
++#    ifndef OAI_RAW_USAGE_PAGE
++#        define OAI_RAW_USAGE_PAGE 0xFF00
++#    endif
++#    ifndef OAI_RAW_USAGE_ID
++#        define OAI_RAW_USAGE_ID 0x61
++#    endif
++#    ifndef OAI_RAW_EPSIZE
++#        define OAI_RAW_EPSIZE 32
++#    endif
++#    ifdef OAI_RAW_REPORT_ID
++#        if OAI_RAW_REPORT_ID < 1 || OAI_RAW_REPORT_ID > 255
++#            error "OAI_RAW_REPORT_ID must be in the range 1..255"
++#        endif
++#        if OAI_RAW_EPSIZE < 2
++#            error "OAI_RAW_REPORT_ID requires room for an ID and payload"
++#        endif
++#        define OAI_RAW_REPORT_PAYLOAD_SIZE (OAI_RAW_EPSIZE - 1)
++#    else
++#        define OAI_RAW_REPORT_PAYLOAD_SIZE OAI_RAW_EPSIZE
++#    endif
++#    if OAI_RAW_REPORT_PAYLOAD_SIZE < 1
++#        error "OAI Raw HID report payload must contain at least one byte"
++#    endif
++#endif
+ #define CONSOLE_EPSIZE 32
+ #define MIDI_STREAM_EPSIZE 64
+ #define CDC_NOTIFICATION_EPSIZE 8

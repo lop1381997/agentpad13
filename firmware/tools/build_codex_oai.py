@@ -37,8 +37,10 @@ OAI_ARTIFACT = REPO_ROOT / "release" / "firmware" / "prebuilt" / "agentpad13_cod
 VIAL_OAI_ARTIFACT = REPO_ROOT / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2"
 VIA_COMMAND_PATCH = REPO_ROOT / "firmware" / "patches" / "0001-via-command-kb-backport.patch"
 OAI_DESCRIPTOR_PATCH = REPO_ROOT / "firmware" / "patches" / "0002-raw-hid-report-id-chibios.patch"
+DUAL_RAW_HID_PATCH = REPO_ROOT / "firmware" / "patches" / "0003-dual-raw-hid-chibios.patch"
 VIA_COMMAND_PATCH_SHA256 = "b12c375f7de6361fb2b26ecd003b0ffd717fb54d1441f37574866c86f473268c"
 OAI_DESCRIPTOR_PATCH_SHA256 = "48eb5211383c8aa338e5b266b34cb3a90fc97cccc5586754f35d54a7bfdac002"
+DUAL_RAW_HID_PATCH_SHA256 = "ab1d1f51d34c95cc40d0e9f5a2df46089dc02304500f3cc50958db3c31874ccb"
 QMK_PATCHED_FILE_SHA256 = {
     "quantum/via.c": "48291b5dceb67de7daf7caad9db5399c69f463485203476ae4586814f3ad46f5",
     "quantum/via.h": "0a8ef108af7114bbc1da252f2017d7a9dc502750e6d75bd6506e1513ef226e7d",
@@ -50,6 +52,18 @@ QMK_DESCRIPTOR_BASE_SHA256 = {
 QMK_DESCRIPTOR_PATCHED_SHA256 = {
     "tmk_core/protocol/usb_descriptor.c": "09f655faea016c21e2318d1f34d1345b2e8424f64f064f1a92ef6be7118cf5e3",
     "tmk_core/protocol/usb_descriptor.h": "2e8dc4cd1edf372b6ffd1308a1e9e7c42bda07642c0d373a7b3e124103b9339e",
+}
+QMK_DUAL_RAW_HID_PATCHED_SHA256 = {
+    "quantum/main.c": "2f91287899fc26127ed05992e581c147cd8a8cbdb4b0d07b0ac57c752556604c",
+    "quantum/raw_hid.c": "05522bc010be61be4fce1e4f4781834655ea1c166e6eb7260eef1232f030a233",
+    "quantum/raw_hid.h": "693ab45fac1e309a575043cbb76e0044dd0c9ed35fd8979c124e41c5d7275583",
+    "tmk_core/protocol/host.c": "7043fb7a9fcfcc64df69b532ebdd58767b143374ccbf5e54ce57c13a3d3b69c3",
+    "tmk_core/protocol/host.h": "4c97227c8e409557f976d92f08bf92cb8431069f638e3baa37f63a61056af6b1",
+    "tmk_core/protocol/usb_descriptor.c": "b188fcfd8773a1504c354e2ae2354105d2d57ca3dcd79725964163a06dd07f8f",
+    "tmk_core/protocol/usb_descriptor.h": "d3fcbea56419f3b7956ce473c6bd8b3b5bb44cf0443f5c50bd8d659a52c5144a",
+    "tmk_core/protocol/chibios/usb_endpoints.c": "93df2a79fc6f58c22602fe57e9d1b7fd8e30077f0756f23b842e5b3e9996f9f4",
+    "tmk_core/protocol/chibios/usb_endpoints.h": "df744207eac81e21e17171caaa0a00cd203f58c7f0a66d811ba01fa87331f72a",
+    "tmk_core/protocol/chibios/usb_main.c": "682fd218db2adbdbb67f63a224ec8a52352a6984f4b949365ea73986de215e61",
 }
 PINNED_GCC_VERSION = (
     "arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) "
@@ -98,20 +112,29 @@ def _verify_file_sha256(path: Path, expected: str, *, label: str) -> None:
 
 
 def validate_qmk_state(status: str, file_digests: Mapping[str, str]) -> str:
-    """Accept only the exact repository-owned patch 0001 or 0001+0002 states."""
+    """Accept only the exact repository-owned 0001, 0001+0002, or 0001+0002+0003 states."""
     patch1_paths = frozenset(QMK_PATCHED_FILE_SHA256)
     patch2_paths = frozenset(QMK_DESCRIPTOR_PATCHED_SHA256)
+    patch3_paths = frozenset(QMK_DUAL_RAW_HID_PATCHED_SHA256)
     actual_status = frozenset(line for line in status.splitlines() if line)
     patch1_status = frozenset(f" M {path}" for path in patch1_paths)
     patch12_status = patch1_status | frozenset(f" M {path}" for path in patch2_paths)
+    patch123_status = patch12_status | frozenset(f" M {path}" for path in patch3_paths)
     if actual_status == patch1_status:
         expected_digests = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
         state = "patch-0001"
     elif actual_status == patch12_status:
         expected_digests = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_PATCHED_SHA256
         state = "patch-0001+patch-0002"
+    elif actual_status == patch123_status:
+        expected_digests = (
+            QMK_PATCHED_FILE_SHA256
+            | QMK_DESCRIPTOR_PATCHED_SHA256
+            | QMK_DUAL_RAW_HID_PATCHED_SHA256
+        )
+        state = "patch-0001+patch-0002+patch-0003"
     else:
-        unexpected = ", ".join(sorted(actual_status ^ patch12_status)) or "unknown state"
+        unexpected = ", ".join(sorted(actual_status ^ patch123_status)) or "unknown state"
         raise BuildError(f"unexpected QMK modification set: {unexpected}")
 
     for path, expected in expected_digests.items():
@@ -141,7 +164,26 @@ def verify_qmk_source_state(qmk_home: Path) -> str:
         )
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
         raise BuildError("could not read exact QMK worktree state") from exc
-    paths = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
+    actual_status = frozenset(line for line in status.splitlines() if line)
+    patch1_status = frozenset(f" M {path}" for path in QMK_PATCHED_FILE_SHA256)
+    patch12_status = patch1_status | frozenset(f" M {path}" for path in QMK_DESCRIPTOR_PATCHED_SHA256)
+    patch123_status = patch12_status | frozenset(f" M {path}" for path in QMK_DUAL_RAW_HID_PATCHED_SHA256)
+    if actual_status == patch1_status:
+        paths = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
+    elif actual_status == patch12_status:
+        paths = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_PATCHED_SHA256
+    elif actual_status == patch123_status:
+        paths = (
+            QMK_PATCHED_FILE_SHA256
+            | QMK_DESCRIPTOR_PATCHED_SHA256
+            | QMK_DUAL_RAW_HID_PATCHED_SHA256
+        )
+    else:
+        paths = (
+            QMK_PATCHED_FILE_SHA256
+            | QMK_DESCRIPTOR_BASE_SHA256
+            | QMK_DUAL_RAW_HID_PATCHED_SHA256
+        )
     digests = {path: _file_sha256(qmk_home / path) for path in paths}
     return validate_qmk_state(status, digests)
 
@@ -162,6 +204,9 @@ def validate_qmk_home(qmk_home: Path, *, head: str | None = None) -> str:
     )
     _verify_file_sha256(
         OAI_DESCRIPTOR_PATCH, OAI_DESCRIPTOR_PATCH_SHA256, label="repository patch 0002"
+    )
+    _verify_file_sha256(
+        DUAL_RAW_HID_PATCH, DUAL_RAW_HID_PATCH_SHA256, label="repository patch 0003"
     )
     verify_qmk_source_state(qmk_home)
 
@@ -215,6 +260,48 @@ def verify_oai_descriptor_support(qmk_home: Path) -> None:
         fragment in source_text for fragment in required_source
     ):
         raise BuildError("the required ChibiOS Raw HID Report-ID patch is not applied")
+
+
+def verify_dual_raw_hid_support(qmk_home: Path) -> None:
+    """Require every repository-owned symbol that makes the OAI HID interface usable."""
+    source_paths = tuple(QMK_DUAL_RAW_HID_PATCHED_SHA256)
+    try:
+        combined_qmk_sources = "\n".join(
+            (qmk_home / path).read_text(encoding="utf-8") for path in source_paths
+        )
+    except (OSError, UnicodeError) as exc:
+        raise BuildError("QMK home is missing the dual Raw HID sources") from exc
+    required = (
+        "OAI_RAW_HID_ENABLE", "OAI_RAW_EPSIZE", "OAI_RAW_REPORT_ID",
+        "OAI_RAW_REPORT_PAYLOAD_SIZE", "OAI_RAW_INTERFACE",
+        "USB_ENDPOINT_IN_OAI_RAW", "USB_ENDPOINT_OUT_OAI_RAW",
+        "oai_raw_hid_send", "oai_raw_hid_receive", "oai_raw_hid_task",
+    )
+    if not all(fragment in combined_qmk_sources for fragment in required):
+        raise BuildError("the required dual Raw HID patch is not applied")
+
+
+def _apply_or_verify_patch(qmk_home: Path, patch: Path, expected_sha256: str, *, label: str) -> None:
+    if patch.is_symlink() or not patch.is_file():
+        raise BuildError(f"{label} is unavailable or unsafe: {patch}")
+    _verify_file_sha256(patch, expected_sha256, label=label)
+    if _git_apply_check(qmk_home, patch):
+        _run(("git", "-C", str(qmk_home), "apply", str(patch)), cwd=qmk_home)
+    elif not _git_apply_check(qmk_home, patch, reverse=True):
+        raise BuildError(f"{label} does not apply cleanly to pinned QMK")
+
+
+def apply_qmk_patches(qmk_home: Path) -> None:
+    """Apply or verify repository patches in their required dependency order."""
+    _apply_or_verify_patch(
+        qmk_home, VIA_COMMAND_PATCH, VIA_COMMAND_PATCH_SHA256, label="repository patch 0001"
+    )
+    _apply_or_verify_patch(
+        qmk_home, OAI_DESCRIPTOR_PATCH, OAI_DESCRIPTOR_PATCH_SHA256, label="repository patch 0002"
+    )
+    _apply_or_verify_patch(
+        qmk_home, DUAL_RAW_HID_PATCH, DUAL_RAW_HID_PATCH_SHA256, label="repository patch 0003"
+    )
 
 
 def apply_oai_descriptor_patch(qmk_home: Path, patch: Path = OAI_DESCRIPTOR_PATCH) -> None:
@@ -355,8 +442,10 @@ def publish_oai_uf2(source: Path, destination: Path = OAI_ARTIFACT) -> None:
 def build_all(qmk_home: Path, *, clean: bool) -> None:
     """Validate, stage, lint, compile and publish without touching hardware."""
     validate_qmk_home(qmk_home)
-    apply_oai_descriptor_patch(qmk_home)
+    apply_qmk_patches(qmk_home)
     verify_qmk_source_state(qmk_home)
+    verify_oai_descriptor_support(qmk_home)
+    verify_dual_raw_hid_support(qmk_home)
     find_cross_compiler()
     link = keyboard_link(qmk_home, KEYBOARD_SOURCE)
     try:

@@ -19,12 +19,14 @@ import build_codex_oai as builder  # noqa: E402
 from build_codex_oai import (  # noqa: E402
     BuildError,
     apply_oai_descriptor_patch,
+    apply_qmk_patches,
     cleanup_keyboard_link,
     find_cross_compiler,
     keyboard_link,
     publish_oai_uf2,
     run_build,
     validate_qmk_home,
+    verify_dual_raw_hid_support,
     verify_oai_descriptor_support,
 )
 
@@ -83,6 +85,95 @@ class BuildToolSafetyTest(unittest.TestCase):
         validate = getattr(builder, "validate_qmk_state", lambda *_args: None)
         with self.assertRaisesRegex(BuildError, "content digest"):
             validate(status, wrong_digests)
+
+    def test_dual_raw_hid_patch_is_repository_owned_and_complete(self) -> None:
+        patch = REPO / "firmware" / "patches" / "0003-dual-raw-hid-chibios.patch"
+        self.assertTrue(patch.is_file())
+        patch_text = patch.read_text(encoding="utf-8")
+        required = (
+            "quantum/main.c", "quantum/raw_hid.c", "quantum/raw_hid.h",
+            "tmk_core/protocol/host.c", "tmk_core/protocol/host.h",
+            "tmk_core/protocol/usb_descriptor.c", "tmk_core/protocol/usb_descriptor.h",
+            "tmk_core/protocol/chibios/usb_endpoints.c",
+            "tmk_core/protocol/chibios/usb_endpoints.h",
+            "tmk_core/protocol/chibios/usb_main.c",
+            "OAI_RAW_HID_ENABLE", "oai_raw_hid_receive", "oai_raw_hid_send",
+            "OAI_RAW_REPORT_ID", "OAI_RAW_REPORT_PAYLOAD_SIZE",
+        )
+        for fragment in required:
+            self.assertIn(fragment, patch_text)
+
+    def test_qmk_state_accepts_exact_three_patch_state(self) -> None:
+        patch_paths = (
+            *builder.QMK_PATCHED_FILE_SHA256,
+            *builder.QMK_DESCRIPTOR_PATCHED_SHA256,
+            *builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+        )
+        status = "".join(f" M {path}\n" for path in patch_paths)
+        digests = {
+            path: digest
+            for inventory in (
+                builder.QMK_PATCHED_FILE_SHA256,
+                builder.QMK_DESCRIPTOR_PATCHED_SHA256,
+                builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+            )
+            for path, digest in inventory.items()
+        }
+        self.assertEqual(builder.validate_qmk_state(status, digests), "patch-0001+patch-0002+patch-0003")
+
+    def test_qmk_state_rejects_unlisted_changed_file_in_three_patch_state(self) -> None:
+        patch_paths = (
+            *builder.QMK_PATCHED_FILE_SHA256,
+            *builder.QMK_DESCRIPTOR_PATCHED_SHA256,
+            *builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+        )
+        status = "".join(f" M {path}\n" for path in patch_paths) + " M quantum/unlisted.c\n"
+        digests = {
+            path: digest
+            for inventory in (
+                builder.QMK_PATCHED_FILE_SHA256,
+                builder.QMK_DESCRIPTOR_PATCHED_SHA256,
+                builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+            )
+            for path, digest in inventory.items()
+        }
+        with self.assertRaisesRegex(BuildError, "unexpected QMK modification"):
+            builder.validate_qmk_state(status, digests)
+
+    def test_builder_applies_repository_patches_in_order(self) -> None:
+        patch_paths = (
+            builder.VIA_COMMAND_PATCH,
+            builder.OAI_DESCRIPTOR_PATCH,
+            builder.DUAL_RAW_HID_PATCH,
+        )
+        apply_checks = iter((True, True, True))
+        applied: list[Path] = []
+
+        def fake_apply(*args, **_kwargs):
+            applied.append(Path(args[0][-1]))
+
+        with mock.patch.object(builder, "_git_apply_check", side_effect=lambda *_args, **_kwargs: next(apply_checks)), mock.patch.object(
+            builder, "_run", side_effect=fake_apply
+        ):
+            apply_qmk_patches(self.fake_qmk)
+
+        self.assertEqual(applied, list(patch_paths))
+
+    def test_dual_capability_gate_rejects_missing_oai_endpoint(self) -> None:
+        required = (
+            "OAI_RAW_HID_ENABLE", "OAI_RAW_EPSIZE", "OAI_RAW_REPORT_ID",
+            "OAI_RAW_REPORT_PAYLOAD_SIZE", "OAI_RAW_INTERFACE",
+            "USB_ENDPOINT_IN_OAI_RAW", "USB_ENDPOINT_OUT_OAI_RAW",
+            "oai_raw_hid_send", "oai_raw_hid_receive", "oai_raw_hid_task",
+        )
+        source_text = "\n".join(required).replace("USB_ENDPOINT_OUT_OAI_RAW", "")
+        for path in builder.QMK_DUAL_RAW_HID_PATCHED_SHA256:
+            target = self.fake_qmk / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(source_text, encoding="utf-8")
+
+        with self.assertRaisesRegex(BuildError, "required dual Raw HID patch"):
+            verify_dual_raw_hid_support(self.fake_qmk)
 
     def test_refuses_existing_real_keyboard_directory(self) -> None:
         (self.fake_qmk / "keyboards" / "loudest_micro").mkdir()
