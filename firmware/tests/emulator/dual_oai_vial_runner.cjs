@@ -31,11 +31,12 @@ const VIAL_REPORT_BYTES = 32;
 const OAI_REPORT_BYTES = 64;
 const OAI_REPORT_ID = 6;
 const OAI_MAX_PAYLOAD = OAI_REPORT_BYTES - 3;
-// ChibiOS allocates the standard Vial RAW pair first, then OAI_RAW_IN followed
-// immediately by OAI_RAW_OUT. These fallback numbers are used only when the
-// emulator truncates the configuration transfer before interface 2 appears.
-const OAI_RAW_IN_EPNUM = 4;
-const OAI_RAW_OUT_EPNUM = 5;
+// ChibiOS allocates the keyboard IN endpoint first, then the standard Vial RAW
+// pair, then OAI_RAW_IN followed immediately by OAI_RAW_OUT. These fallback
+// numbers are used only when the emulator truncates the configuration transfer
+// before interface 2 appears.
+const OAI_RAW_IN_EPNUM = 3;
+const OAI_RAW_OUT_EPNUM = 4;
 
 function usageHex(value, width) {
   return value.toString(16).padStart(width, '0');

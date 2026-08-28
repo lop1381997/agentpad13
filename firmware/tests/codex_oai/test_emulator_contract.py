@@ -67,6 +67,29 @@ def run_dual_oai_vial_emulator(uf2: Path) -> dict[str, object]:
 
 
 class OaiEmulatorContractTest(unittest.TestCase):
+    def test_dual_smoke_completes_without_emulator_hang(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("pre-hardware emulator gate: node is unavailable")
+        if not DUAL_OAI_VIAL_UF2.is_file():
+            self.skipTest(
+                "pre-hardware build gate: agentpad13_oai_vial_dual.uf2 is not "
+                "available; run firmware/tools/build_codex_oai.py first"
+            )
+        with tempfile.TemporaryDirectory(prefix="agentpad13_dual_oai_vial_bounded_") as directory:
+            evidence_path = Path(directory) / "evidence.json"
+            try:
+                result = subprocess.run(
+                    ["node", "dual_oai_vial_runner.cjs", str(DUAL_OAI_VIAL_UF2), "--json", str(evidence_path)],
+                    cwd=EMULATOR,
+                    check=False,
+                    text=True,
+                    capture_output=True,
+                    timeout=15,
+                )
+            except subprocess.TimeoutExpired as exc:
+                self.fail(f"dual emulator hung for 15 seconds: {exc}")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_evidence_requires_oai_descriptor_and_handshake(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("pre-hardware emulator gate: node is unavailable")
@@ -245,7 +268,7 @@ const blocked = runner.recoverTruncatedConfig(runner.parseConfig(prefix), { comp
 if (!runner.hasValidatedDualConfigPrefix(prefix) || runner.hasValidatedDualConfigPrefix(invalidHeader) ||
     runner.hasValidatedDualConfigPrefix(invalidVial) || !recovery.used ||
     !recovery.syntheticOaiEndpoint || recovery.syntheticOaiEndpoint.interface_number !== 2 ||
-    recovery.syntheticOaiEndpoint.in_endpoint !== 4 || recovery.syntheticOaiEndpoint.out_endpoint !== 5 ||
+    recovery.syntheticOaiEndpoint.in_endpoint !== 3 || recovery.syntheticOaiEndpoint.out_endpoint !== 4 ||
     !recovery.syntheticOaiEndpoint.not_descriptor_proof || preserved.used ||
     JSON.stringify(parsed) !== snapshot || blocked.used) process.exit(1);
 '''
@@ -289,8 +312,8 @@ if (!runner.hasValidatedDualConfigPrefix(prefix) || runner.hasValidatedDualConfi
                 evidence["synthetic_oai_endpoint"],
                 {
                     "interface_number": 2,
-                    "in_endpoint": 4,
-                    "out_endpoint": 5,
+                    "in_endpoint": 3,
+                    "out_endpoint": 4,
                     "not_descriptor_proof": True,
                 },
             )

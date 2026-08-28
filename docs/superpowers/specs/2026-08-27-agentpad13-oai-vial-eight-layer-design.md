@@ -1,5 +1,8 @@
 # AgentPad13 OAI + Vial, eight-layer design
 
+Historical: this `0xA6` single-interface design is superseded by the
+2026-08-28 dual-HID OAI + Vial specification and is retained for provenance.
+
 ## Purpose
 
 Deliver a new, installable AgentPad13 firmware target that combines the

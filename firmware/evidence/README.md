@@ -6,12 +6,22 @@ the UF2 SHA-256 and byte size recorded in `codex-oai-current-manifest.json`.
 The current port rebuild is 93,696 bytes with SHA-256
 `a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
 
-`vial-oai-emulator.json` is the equivalent capture for
+`dual-oai-vial-emulator.json` is the current Task-5 capture for
+`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`. It proves the
+three-interface descriptor, the exact Vial `FF60:61` and OAI `FF00:61`
+contracts, both protocol paths, OAI event/LED behavior and response isolation.
+The current dual rebuild is 123,904 bytes with SHA-256
+`ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c`.
+Its verifier manifest is `dual-oai-vial-current-manifest.json`.
+
+`vial-oai-emulator.json` is the historical capture for
 `release/firmware/prebuilt/agentpad13_vial_oai.uf2`, the eight-layer Vial OAI
 target. Its evidence must match `vial-oai-current-manifest.json`; it proves
 both ordinary Vial traffic and the default dynamic keymap. The current Vial
 OAI rebuild is 124,416 bytes with SHA-256
-`848e7249a3ccae3dcf8a52a25bbc1493de358f6b3c24bdb1c19aa7c8fdc49aef`.
+`848e7249a3ccae3dcf8a52a25bbc1493de358f6b3c24bdb1c19aa7c8fdc49aef`. This
+artifact uses the obsolete single-interface `0xA6` framing and is not a claim
+about the current dual-HID release.
 
 Two earlier provenance layers remain explicit:
 

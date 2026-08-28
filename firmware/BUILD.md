@@ -152,7 +152,25 @@ npm run smoke:codex-oai && npm run smoke:vial-oai
 Recorded results and the emulator-fidelity caveats are in
 `firmware/FIRMWARE-V4-NOTES.md` §4d.
 
-### AgentPad13 Vial OAI (Phase 3 firmware foundation)
+### AgentPad13 OAI + Vial dual HID (current local candidate)
+
+The current Task-5 candidate is
+`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 123,904 bytes, SHA-256
+`ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c`.
+Its paired Vial definition is
+`release/firmware/prebuilt/agentpad13_oai_vial_dual.vial`. It keeps the Direct
+OAI identity and wire contract (`303A:8360`, `FF00:61`, Report ID 6, 64-byte
+reports) while exposing Vial on a separate `FF60:61`, report-ID-less, 32-byte
+interface. The exact three-interface descriptor, ELF/UF2 equivalence, both
+protocol paths, endpoint isolation and LED/event behavior pass in the recorded
+offline evidence. Physical validation is pending; use
+`docs/dual-oai-vial-physical-runbook.md` for the gated manual procedure.
+
+### AgentPad13 Vial OAI (historical Phase 3 firmware foundation)
+
+This section and its artifact are retained for provenance only. It is
+superseded by the current dual-HID candidate above and must not be treated as
+the current combined OAI + Vial release.
 
 `loudest_micro:vial_oai` is the Phase-3 target for a keyboard that remains
 fully configurable in Vial while exposing the OAI task/status channel used by

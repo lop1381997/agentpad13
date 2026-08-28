@@ -1,5 +1,8 @@
 # AgentPad13 OAI + Vial Eight-Layer Implementation Plan
 
+Historical: this `0xA6` single-interface plan is superseded by the
+2026-08-28 dual-HID OAI + Vial specification and is retained for provenance.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship a separate `vial_oai` UF2 that provides direct OAI controls and Vial-editable keys, encoder directions and eight layers.

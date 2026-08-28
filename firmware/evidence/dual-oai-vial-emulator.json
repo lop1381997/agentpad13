@@ -1,0 +1,80 @@
+{
+  "uf2_blocks": 242,
+  "uf2_size_bytes": 123904,
+  "uf2_sha256": "ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c",
+  "usb_enumerated": true,
+  "vid_pid": "303a:8360",
+  "vial_interface": {
+    "usage": "ff60:0061",
+    "report_id": null,
+    "report_bytes": 32
+  },
+  "oai_interface": {
+    "usage": "ff00:0061",
+    "report_id": 6,
+    "report_bytes": 64
+  },
+  "vial_endpoint": {
+    "number": 1,
+    "in_endpoint": 1,
+    "out_endpoint": 2,
+    "in_bytes": 32,
+    "out_bytes": 32
+  },
+  "oai_endpoint": {
+    "number": 2,
+    "in_endpoint": 3,
+    "out_endpoint": 4,
+    "in_bytes": 64,
+    "out_bytes": 64
+  },
+  "report_descriptor_requests": [
+    1,
+    2
+  ],
+  "config_descriptor_recovery_used": true,
+  "synthetic_vial_out_endpoint": {
+    "interface_number": 1,
+    "out_endpoint": 2,
+    "not_descriptor_proof": true
+  },
+  "synthetic_oai_endpoint": {
+    "interface_number": 2,
+    "in_endpoint": 3,
+    "out_endpoint": 4,
+    "not_descriptor_proof": true
+  },
+  "keyboard_hid_enumerated": true,
+  "oai_hid_enumerated": true,
+  "descriptor_verified": true,
+  "vial_protocol_ack": true,
+  "vial_default_k00": 32258,
+  "rgbcfg_ack": true,
+  "thstatus_ack": true,
+  "device_status_ack": true,
+  "task_status": {
+    "id": 0,
+    "c": 3162110,
+    "e": 4,
+    "b": 1,
+    "s": 0.5
+  },
+  "task_status_fragment_count": 2,
+  "key_event": {
+    "k": "AG00",
+    "act": 1
+  },
+  "ws2812_activity": true,
+  "channels_isolated": true,
+  "gp17_edges_after_thstatus": 38016,
+  "usb_events": [
+    "[257.2ms] USB controller enabled",
+    "[267.2ms] USB reset",
+    "[600.1ms] vial IN 32B",
+    "[600.2ms] oai IN 64B",
+    "[1120.1ms] vial IN 32B",
+    "[1390.2ms] oai IN 64B",
+    "[1910.2ms] oai IN 64B",
+    "[2184.3ms] oai IN 64B"
+  ]
+}

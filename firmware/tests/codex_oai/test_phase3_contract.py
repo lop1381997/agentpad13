@@ -24,9 +24,11 @@ CURRENT_MANIFEST = REPO / "firmware" / "evidence" / "codex-oai-current-manifest.
 VIAL_CURRENT_MANIFEST = REPO / "firmware" / "evidence" / "vial-oai-current-manifest.json"
 DUAL_CURRENT_MANIFEST = REPO / "firmware" / "evidence" / "dual-oai-vial-current-manifest.json"
 RUNBOOK = REPO / "docs" / "codex-oai-physical-runbook.md"
+DUAL_RUNBOOK = REPO / "docs" / "dual-oai-vial-physical-runbook.md"
 UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_codex_oai.uf2"
 VIAL_UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2"
 DUAL_UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_oai_vial_dual.uf2"
+DUAL_VIAL = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_oai_vial_dual.vial"
 
 BOOTROM_COMMIT = "7701ee065f50a04380f81361befd754810cb9e28"
 BOOTROM_SHA256 = "99f8a1f813ce3aa9415884de3fb6c5b962d3c6fa0394b05413ad3c7b3c39ec62"
@@ -117,6 +119,22 @@ class Phase3ReleaseContractTest(unittest.TestCase):
         self.assertEqual(manifest["target"], "loudest_micro:vial_oai")
         self.assertEqual(manifest["sha256"], digest)
         self.assertEqual(manifest["emulator_evidence"]["uf2_sha256"], digest)
+
+    def test_dual_candidate_definition_and_runbook_are_ready_for_manual_test(self) -> None:
+        self.assertTrue(DUAL_UF2.is_file(), f"missing dual release artifact: {DUAL_UF2}")
+        self.assertTrue(DUAL_VIAL.is_file(), f"missing dual Vial definition: {DUAL_VIAL}")
+        self.assertTrue(DUAL_RUNBOOK.is_file(), f"missing dual physical runbook: {DUAL_RUNBOOK}")
+        runbook = DUAL_RUNBOOK.read_text(encoding="utf-8")
+        for fragment in (
+            "FF60:61",
+            "FF00:61",
+            "Vial layer persistence",
+            "custom OAI assignment",
+            "Codex Desktop detection",
+            "event/LED",
+            "recovery UF2",
+        ):
+            self.assertIn(fragment, runbook)
 
     def test_older_vial_oai_capture_is_named_historical_not_current(self) -> None:
         self.assertTrue(VIAL_EVIDENCE.is_file(), f"missing historical evidence: {VIAL_EVIDENCE}")

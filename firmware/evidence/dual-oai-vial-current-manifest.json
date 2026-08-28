@@ -1,0 +1,86 @@
+{
+  "elf_sha256": "b436e653c1ce988d7a39bbf8c1dca278ced511d4613f5a1106c7542d060f25d2",
+  "elf_size": {
+    "bss": 265120,
+    "data": 0,
+    "text": 61916
+  },
+  "elf_uf2_equivalence": {
+    "elf_binary_size_bytes": 61916,
+    "flash_base": "0x10000000",
+    "status": "pass",
+    "trailing_zero_padding_bytes": 36,
+    "uf2_flash_size_bytes": 61952
+  },
+  "emulator_evidence": {
+    "channels_isolated": true,
+    "descriptor_verified": true,
+    "device_status_ack": true,
+    "key_event": {
+      "act": 1,
+      "k": "AG00"
+    },
+    "keyboard_hid_enumerated": true,
+    "oai_hid_enumerated": true,
+    "oai_interface": {
+      "report_bytes": 64,
+      "report_id": 6,
+      "usage": "ff00:0061"
+    },
+    "rgbcfg_ack": true,
+    "task_status_fragment_count": 2,
+    "thstatus_ack": true,
+    "uf2_sha256": "ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c",
+    "uf2_size_bytes": 123904,
+    "usb_enumerated": true,
+    "vial_interface": {
+      "report_bytes": 32,
+      "report_id": null,
+      "usage": "ff60:0061"
+    },
+    "vial_protocol_ack": true,
+    "ws2812_activity": true
+  },
+  "interfaces": [
+    {
+      "report_bytes": 32,
+      "report_id": null,
+      "role": "vial",
+      "usage": "ff60:0061"
+    },
+    {
+      "report_bytes": 64,
+      "report_id": 6,
+      "role": "oai",
+      "usage": "ff00:0061"
+    }
+  ],
+  "required_symbols": [
+    "codex_led_render",
+    "codex_oai_notify",
+    "encoder_update_user",
+    "oai_raw_hid_receive"
+  ],
+  "sha256": "ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c",
+  "size_bytes": 123904,
+  "status": "pass",
+  "target": "loudest_micro:vial_oai",
+  "usb_descriptor_contract": {
+    "configuration_total_length": 98,
+    "interfaces": [
+      {
+        "endpoint_bytes": 32,
+        "interface": 1,
+        "role": "vial"
+      },
+      {
+        "endpoint_bytes": 64,
+        "interface": 2,
+        "role": "oai"
+      }
+    ],
+    "keyboard_interface": 0,
+    "status": "pass"
+  },
+  "vid_pid": "303a:8360"
+}
