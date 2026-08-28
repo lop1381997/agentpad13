@@ -12,12 +12,20 @@
 #    include "wear_leveling.h"
 #endif
 
-#if !defined(RAW_EPSIZE) || RAW_EPSIZE != OAI_REPORT_SIZE
-#    error "The selected OAI transport requires a matching Raw HID endpoint"
-#endif
-
-#if !defined(CODEX_OAI_VIAL) && (!defined(RAW_REPORT_ID) || RAW_REPORT_ID != OAI_REPORT_ID)
-#    error "The Direct OAI probe requires HID Report ID 6"
+#if defined(CODEX_OAI_DUAL_HID)
+#    if !defined(OAI_RAW_EPSIZE) || OAI_RAW_EPSIZE != OAI_REPORT_SIZE
+#        error "The dual OAI transport requires a matching dedicated Raw HID endpoint"
+#    endif
+#    if !defined(OAI_RAW_REPORT_ID) || OAI_RAW_REPORT_ID != OAI_REPORT_ID
+#        error "The dual OAI transport requires HID Report ID 6"
+#    endif
+#else
+#    if !defined(RAW_EPSIZE) || RAW_EPSIZE != OAI_REPORT_SIZE
+#        error "The selected OAI transport requires a matching Raw HID endpoint"
+#    endif
+#    if !defined(RAW_REPORT_ID) || RAW_REPORT_ID != OAI_REPORT_ID
+#        error "The Direct OAI probe requires HID Report ID 6"
+#    endif
 #endif
 
 typedef struct {
@@ -76,7 +84,7 @@ static oai_slot_t slots[OAI_SLOT_COUNT];
 
 #define OAI_TX_MESSAGE_CAPACITY 96U
 
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
 static uint8_t  oai_keymap[OAI_KEYMAP_POSITION_COUNT];
 
 static const uint8_t default_oai_keymap[OAI_KEYMAP_POSITION_COUNT] = {
@@ -152,7 +160,7 @@ static int8_t hex_digit_value(unsigned char value) {
     return -1;
 }
 
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
 static char hex_digit(uint8_t value) {
     return value < 10U ? (char)('0' + value) : (char)('a' + value - 10U);
 }
@@ -348,7 +356,7 @@ void codex_oai_init(void) {
     error_revision = 0;
     handshake_revision = 0;
     last_event_was_error = false;
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
     keymap_load();
 #endif
 }
@@ -949,7 +957,7 @@ static bool parse_thstatus_params(const char *input, size_t start, size_t end) {
     return true;
 }
 
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
 static bool parse_keymap_params(
     const char *input,
     size_t start,
@@ -1124,6 +1132,14 @@ static uint8_t append_id(
     return offset;
 }
 
+static void oai_send(uint8_t *report, uint8_t length) {
+#if defined(CODEX_OAI_DUAL_HID)
+    oai_raw_hid_send(report, length);
+#else
+    raw_hid_send(report, length);
+#endif
+}
+
 static void send_rpc_message(const uint8_t *message, uint8_t length) {
     uint8_t offset = 0;
     do {
@@ -1136,7 +1152,7 @@ static void send_rpc_message(const uint8_t *message, uint8_t length) {
         report[1] = OAI_CHANNEL_RPC;
         report[2] = chunk;
         memcpy(report + 3, message + offset, chunk);
-        raw_hid_send(report, OAI_REPORT_SIZE);
+        oai_send(report, OAI_REPORT_SIZE);
         offset = (uint8_t)(offset + chunk);
     } while (offset < length);
 }
@@ -1150,7 +1166,7 @@ static void send_response(const char *prefix, uint16_t id) {
     send_rpc_message(message, offset);
 }
 
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
 static void send_keymap_get_response(uint16_t id, const char map[OAI_KEYMAP_POSITION_COUNT + 1]) {
     uint8_t message[OAI_TX_MESSAGE_CAPACITY] = {0};
     uint8_t offset = 0;
@@ -1184,7 +1200,7 @@ static bool dispatch_request(const char *input, size_t length) {
     } else if (strcmp(request.method, "device.status") == 0) {
         send_response("{\"result\":{},\"id\":", request.id);
     }
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
     else if (strcmp(request.method, "v.oai.keymap.get") == 0) {
         uint32_t layer = 0;
         char map[OAI_KEYMAP_POSITION_COUNT + 1];
@@ -1320,13 +1336,9 @@ static void oai_receive_frame(uint8_t *data, uint8_t length) {
     }
 }
 
-#if defined(CODEX_OAI_VIAL)
-CODEX_OAI_KEEP bool codex_oai_vial_command(uint8_t *data, uint8_t length) {
-    if (!oai_frame_is_valid(data, length)) {
-        return false;
-    }
+#if defined(CODEX_OAI_DUAL_HID)
+CODEX_OAI_KEEP void oai_raw_hid_receive(uint8_t *data, uint8_t length) {
     oai_receive_frame(data, length);
-    return true;
 }
 #else
 CODEX_OAI_KEEP void raw_hid_receive(uint8_t *data, uint8_t length) {

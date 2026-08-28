@@ -1,7 +1,7 @@
 {
     "name": "AgentPad13 OAI + Vial",
-    "vendorId": "0xFEED",
-    "productId": "0x4C4D",
+    "vendorId": "0x303A",
+    "productId": "0x8360",
     "lighting": "vialrgb",
     "matrix": {
         "rows": 4,

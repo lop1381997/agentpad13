@@ -11,18 +11,18 @@
 #include "codex_rgb_cap.h"
 
 #ifndef CODEX_EXTRA_LAYERS
-#    if defined(CODEX_OAI_VIAL)
+#    if defined(CODEX_OAI_DYNAMIC_KEYMAP)
 #        define CODEX_EXTRA_LAYERS 6
 #    else
 #        define CODEX_EXTRA_LAYERS 2
 #    endif
 #endif
 
-/* The Direct OAI target keeps its existing four-layer default.  Vial-OAI
- * always compiles the eight defaults Vial copies into its dynamic keymap. */
-#if defined(CODEX_OAI_VIAL)
+/* The Direct OAI target keeps its existing four-layer default.  The combined
+ * target always compiles the eight defaults Vial copies into its dynamic keymap. */
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
 #    if CODEX_EXTRA_LAYERS != 6
-#        error "CODEX_OAI_VIAL requires exactly eight layers"
+#        error "CODEX_OAI_DYNAMIC_KEYMAP requires exactly eight layers"
 #    endif
 #else
 #    if CODEX_EXTRA_LAYERS > 3
@@ -126,7 +126,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 #endif
 #if CODEX_EXTRA_LAYERS > 2
     [L_USER4] = LAYOUT(
-#if defined(CODEX_OAI_VIAL)
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
         KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
@@ -166,7 +166,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 /* clang-format on */
 
-#if defined(CODEX_OAI_VIAL) && defined(ENCODER_MAP_ENABLE)
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP) && defined(ENCODER_MAP_ENABLE)
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
     [L_CODEX] = { ENCODER_CCW_CW(OAI_ENC_CCW, OAI_ENC_CW) },
     [L_FN]    = { ENCODER_CCW_CW(KC_WH_U, KC_WH_D) },
@@ -371,7 +371,7 @@ static bool handle_oai_control(codex_oai_control_t control, bool pressed, uint8_
     return notify_or_native(control, pressed);
 }
 
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
 static int8_t codex_oai_position_for_keycode(uint16_t keycode, const keyrecord_t *record) {
     uint8_t row = record == NULL ? 0U : record->event.key.row;
     uint8_t col = record == NULL ? 0U : record->event.key.col;
@@ -428,7 +428,7 @@ static uint8_t codex_oai_feedback_led(uint8_t position) {
     return position;
 }
 
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
 static bool handle_dynamic_oai_position(uint8_t position, keyrecord_t *record) {
     bool pressed = record->event.pressed;
     uint8_t action = codex_oai_keymap_action_for_position(position);
@@ -468,7 +468,7 @@ static bool handle_dynamic_oai_position(uint8_t position, keyrecord_t *record) {
 }
 #endif
 
-#if defined(CODEX_OAI_VIAL)
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
 static int8_t codex_oai_physical_position(const keyrecord_t *record) {
     if (record == NULL) {
         return -1;
@@ -544,7 +544,7 @@ static bool handle_vial_oai_keycode(uint16_t keycode, keyrecord_t *record) {
 
 void eeconfig_init_user(void) {
     eeconfig_update_user(0);
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
     codex_oai_reset_keymap();
 #endif
 }
@@ -580,7 +580,7 @@ void matrix_scan_user(void) {
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     bool pressed = record->event.pressed;
-#if defined(CODEX_OAI_VIAL)
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
     if (!handle_vial_oai_keycode(keycode, record)) {
         return false;
     }
@@ -607,7 +607,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
 }
 
-#if !defined(CODEX_OAI_VIAL)
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
 CODEX_OAI_KEEP bool encoder_update_user(uint8_t index, bool clockwise) {
     if (index != 0U) {
         return false;

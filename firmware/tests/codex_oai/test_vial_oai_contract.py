@@ -22,15 +22,33 @@ def parse_rules(path: Path) -> dict[str, str]:
 
 
 class VialOaiTargetContractTest(unittest.TestCase):
-    def test_vial_oai_target_declares_vial_and_eight_dynamic_layers(self) -> None:
+    def test_vial_oai_target_declares_dual_hid_and_eight_dynamic_layers(self) -> None:
         self.assertTrue(TARGET.is_dir(), "the dedicated Vial-OAI keymap must exist")
         config = (TARGET / "config.h").read_text()
         rules = parse_rules(TARGET / "rules.mk")
 
-        self.assertIn("#define CODEX_OAI_VIAL", config)
-        self.assertIn("#define OAI_VIAL_FRAME_PREFIX 0xA6", config)
+        self.assertIn("#define OAI_RAW_HID_ENABLE", config)
+        self.assertIn("#define OAI_RAW_USAGE_PAGE 0xFF00", config)
+        self.assertIn("#define OAI_RAW_USAGE_ID 0x61", config)
+        self.assertIn("#define OAI_RAW_EPSIZE 64", config)
+        self.assertIn("#define OAI_RAW_REPORT_ID 6", config)
+        self.assertIn("#define CODEX_OAI_DUAL_HID", config)
+        self.assertIn("#define CODEX_OAI_DYNAMIC_KEYMAP", config)
+        self.assertIn("#define LOUDEST_CUSTOM_RAW_HID", config)
+        self.assertIn("#define VENDOR_ID 0x303A", config)
+        self.assertIn("#define PRODUCT_ID 0x8360", config)
+        self.assertIn('#define MANUFACTURER "hirlu"', config)
+        self.assertIn('#define PRODUCT "Codex Micro Lab OAI LED"', config)
+        self.assertIn("#define RAW_USAGE_PAGE 0xFF60", config)
+        self.assertIn("#define RAW_USAGE_ID 0x61", config)
         self.assertIn("#define RAW_EPSIZE 32", config)
         self.assertIn("#define DYNAMIC_KEYMAP_LAYER_COUNT 8", config)
+        self.assertNotIn("#define RAW_REPORT_ID", config)
+        self.assertNotIn("OAI_VIAL_FRAME_PREFIX", config)
+        self.assertNotIn("CODEX_OAI_VIAL", config)
+        vial = (TARGET / "vial.json").read_text()
+        self.assertIn('"vendorId": "0x303A"', vial)
+        self.assertIn('"productId": "0x8360"', vial)
         self.assertEqual(rules["RAW_ENABLE"], "yes")
         self.assertEqual(rules["VIA_ENABLE"], "yes")
         self.assertEqual(rules["VIAL_ENABLE"], "yes")
@@ -42,7 +60,7 @@ class VialOaiLayoutContractTest(unittest.TestCase):
         source = SHARED_KEYMAP.read_text()
         rules = parse_rules(TARGET / "rules.mk")
 
-        self.assertIn("#if defined(CODEX_OAI_VIAL)", source)
+        self.assertIn("#if defined(CODEX_OAI_DYNAMIC_KEYMAP)", source)
         for layer in (
             "L_CODEX",
             "L_FN",
@@ -82,7 +100,7 @@ class VialOaiLayoutContractTest(unittest.TestCase):
 
 
 class VialOaiProtocolContractTest(unittest.TestCase):
-    def test_vial_oai_claims_only_its_prefix_and_fragments_notifications(self) -> None:
+    def test_dual_oai_uses_only_the_dedicated_report_id_six_transport(self) -> None:
         with tempfile.TemporaryDirectory(prefix="agentpad13_vial_oai_") as directory:
             binary = Path(directory) / "vial_oai_protocol_harness"
             build = subprocess.run(
@@ -92,14 +110,15 @@ class VialOaiProtocolContractTest(unittest.TestCase):
                     "-Wall",
                     "-Wextra",
                     "-Werror",
-                    "-DCODEX_OAI_VIAL",
-                    "-DOAI_VIAL_FRAME_PREFIX=0xA6",
-                    "-DRAW_EPSIZE=32",
+                    "-DCODEX_OAI_DUAL_HID",
+                    "-DCODEX_OAI_DYNAMIC_KEYMAP",
+                    "-DOAI_RAW_EPSIZE=64",
+                    "-DOAI_RAW_REPORT_ID=6",
                     "-I",
                     str(HERE / "stubs"),
                     "-I",
                     str(OAI_SOURCE.parent),
-                    str(HERE / "vial_oai_protocol_harness.c"),
+                    str(HERE / "dual_oai_protocol_harness.c"),
                     str(OAI_SOURCE),
                     "-o",
                     str(binary),
@@ -116,10 +135,8 @@ class VialOaiProtocolContractTest(unittest.TestCase):
         source = KEYBOARD_SOURCE.read_text()
 
         self.assertIn("bool via_command_kb(uint8_t *data, uint8_t length)", source)
-        self.assertIn(
-            "#if defined(CODEX_OAI_VIAL)\n    return codex_oai_vial_command(data, length);\n#endif",
-            source,
-        )
+        self.assertNotIn("codex_oai_vial_command", source)
+        self.assertNotIn("OAI_VIAL_FRAME_PREFIX", source)
 
 
 class VialOaiKeycodeContractTest(unittest.TestCase):
@@ -130,8 +147,8 @@ class VialOaiKeycodeContractTest(unittest.TestCase):
         self.assertIn("static int8_t codex_oai_physical_position", source)
         self.assertIn("case OAI_ENC_CW:", source)
         self.assertIn("case OAI_ENC_CCW:", source)
-        self.assertIn("#if defined(CODEX_OAI_VIAL)\n    if (!handle_vial_oai_keycode(keycode, record))", source)
-        self.assertIn("#if !defined(CODEX_OAI_VIAL)\n    codex_oai_reset_keymap();", source)
+        self.assertIn("#if defined(CODEX_OAI_DYNAMIC_KEYMAP)\n    if (!handle_vial_oai_keycode(keycode, record))", source)
+        self.assertIn("#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)\n    codex_oai_reset_keymap();", source)
 
 
 if __name__ == "__main__":
