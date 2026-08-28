@@ -373,14 +373,24 @@ def _configuration_descriptors(binary: bytes) -> list[list[bytes]]:
     return configurations
 
 
-def _report_items(report: bytes) -> tuple[list[int], list[int], list[int], list[int]]:
-    """Return usage pages, usages, report IDs, and input/output report counts."""
+def _report_items(
+    report: bytes,
+) -> tuple[
+    list[int],
+    list[int],
+    list[int],
+    list[tuple[int | None, int | None]],
+    list[tuple[int | None, int | None]],
+]:
+    """Return usages, IDs, and the report-size/count pair for every main item."""
     usage_pages: list[int] = []
     usages: list[int] = []
     report_ids: list[int] = []
-    input_counts: list[int] = []
-    output_counts: list[int] = []
+    input_fields: list[tuple[int | None, int | None]] = []
+    output_fields: list[tuple[int | None, int | None]] = []
     report_count: int | None = None
+    report_size: int | None = None
+    collection_depth = 0
     cursor = 0
     while cursor < len(report):
         prefix = report[cursor]
@@ -410,11 +420,21 @@ def _report_items(report: bytes) -> tuple[list[int], list[int], list[int], list[
             report_ids.append(value)
         elif item_type == 1 and item_tag == 9:
             report_count = value
-        elif item_type == 0 and item_tag == 8 and report_count is not None:
-            input_counts.append(report_count)
-        elif item_type == 0 and item_tag == 9 and report_count is not None:
-            output_counts.append(report_count)
-    return usage_pages, usages, report_ids, input_counts + output_counts
+        elif item_type == 1 and item_tag == 7:
+            report_size = value
+        elif item_type == 0 and item_tag == 10:
+            collection_depth += 1
+        elif item_type == 0 and item_tag == 12:
+            collection_depth -= 1
+            if collection_depth < 0:
+                raise ValueError("unbalanced HID collection")
+        elif item_type == 0 and item_tag == 8:
+            input_fields.append((report_size, report_count))
+        elif item_type == 0 and item_tag == 9:
+            output_fields.append((report_size, report_count))
+    if collection_depth:
+        raise ValueError("unbalanced HID collection")
+    return usage_pages, usages, report_ids, input_fields, output_fields
 
 
 def _report_matches(report: bytes, interface: HIDInterfaceProfile) -> bool:
@@ -422,41 +442,94 @@ def _report_matches(report: bytes, interface: HIDInterfaceProfile) -> bool:
         usage_page_text, usage_id_text = interface.usage.split(":", 1)
         usage_page = int(usage_page_text, 16)
         usage_id = int(usage_id_text, 16)
-        pages, usages, report_ids, counts = _report_items(report)
+        pages, usages, report_ids, input_fields, output_fields = _report_items(report)
     except (ValueError, UnicodeError):
         return False
     expected_count = interface.report_bytes - (1 if interface.report_id is not None else 0)
-    if expected_count < 1 or pages != [usage_page] or usages.count(usage_id) < 1:
+    expected_prefix = bytes((0x06, usage_page & 0xFF, usage_page >> 8, 0x09, usage_id, 0xA1, 1))
+    if (
+        expected_count < 1
+        or not report.startswith(expected_prefix)
+        or not report.endswith(bytes((0xC0,)))
+        or pages != [usage_page]
+        or usages.count(usage_id) < 1
+    ):
         return False
     if interface.report_id is None:
         if report_ids:
             return False
     elif report_ids != [interface.report_id]:
         return False
-    return counts == [expected_count, expected_count]
+    expected_fields = [(8, expected_count)]
+    return input_fields == expected_fields and output_fields == expected_fields
 
 
-def _find_report_descriptor(binary: bytes, length: int, interface: HIDInterfaceProfile) -> bytes | None:
+def _matching_report_descriptor_offsets(
+    binary: bytes, length: int, interface: HIDInterfaceProfile
+) -> list[int]:
+    """Find report descriptor sequences of one HID-declared length only."""
     if length < 1:
-        return None
-    for offset in range(0, len(binary) - length + 1):
-        report = binary[offset : offset + length]
-        if _report_matches(report, interface):
-            return report
-    return None
+        return []
+    return [
+        offset
+        for offset in range(0, len(binary) - length + 1)
+        if _report_matches(binary[offset : offset + length], interface)
+    ]
 
 
 def _interface_records(descriptors: Sequence[bytes]) -> list[tuple[bytes, list[bytes]]]:
-    records: list[tuple[bytes, list[bytes]]] = []
+    """Group each complete interface descriptor with its subordinate descriptors."""
+    interface_indexes: list[int] = []
     for index, descriptor in enumerate(descriptors):
-        if descriptor[1] != 4 or len(descriptor) < 9:
-            continue
-        following = next(
-            (candidate for candidate in descriptors[index + 1 :] if candidate[1] == 4),
-            None,
+        if descriptor[1] == 4:
+            if len(descriptor) != 9:
+                raise VerificationError("USB descriptor contract has a malformed interface descriptor")
+            interface_indexes.append(index)
+    records: list[tuple[bytes, list[bytes]]] = []
+    for record_index, index in enumerate(interface_indexes):
+        descriptor = descriptors[index]
+        end = (
+            interface_indexes[record_index + 1]
+            if record_index + 1 < len(interface_indexes)
+            else len(descriptors)
         )
-        end = descriptors.index(following, index + 1) if following is not None else len(descriptors)
         records.append((descriptor, list(descriptors[index + 1 : end])))
+    return records
+
+
+def _validated_hid_report_length(hid_descriptor: bytes, *, require_report: bool) -> int:
+    """Validate one HID descriptor and return its only report descriptor length."""
+    if (
+        len(hid_descriptor) != 9
+        or hid_descriptor[0] != 9
+        or hid_descriptor[1] != 0x21
+        or hid_descriptor[5] != 1
+        or hid_descriptor[6] != 0x22
+    ):
+        raise VerificationError("USB descriptor contract has a malformed HID report descriptor declaration")
+    report_length = hid_descriptor[7] | (hid_descriptor[8] << 8)
+    if require_report and report_length < 1:
+        raise VerificationError("USB descriptor contract has an empty raw HID report descriptor")
+    return report_length
+
+
+def _validated_interface_records(
+    descriptors: Sequence[bytes], profile: ArtifactProfile
+) -> list[tuple[bytes, list[bytes]]]:
+    """Require exactly one boot keyboard plus the profile's raw interface count."""
+    configuration = descriptors[0]
+    expected_count = 1 + len(profile.interfaces)
+    if len(configuration) != 9 or configuration[0] != 9 or configuration[1] != 2:
+        raise VerificationError("USB descriptor contract has a malformed configuration descriptor")
+    records = _interface_records(descriptors)
+    numbers = [interface[2] for interface, _following in records]
+    if (
+        configuration[4] != expected_count
+        or len(records) != expected_count
+        or len(set(numbers)) != expected_count
+        or any(interface[3] != 0 for interface, _following in records)
+    ):
+        raise VerificationError("USB descriptor contract has the wrong interface cardinality")
     return records
 
 
@@ -467,30 +540,51 @@ def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[
     if not configurations:
         raise VerificationError("USB descriptor contract has no valid configuration descriptor")
 
-    expected_roles = tuple(interface.role for interface in profile.interfaces)
     for descriptors in configurations:
-        keyboard = [
-            descriptor
-            for descriptor, following in _interface_records(descriptors)
-            if len(descriptor) >= 9
-            and descriptor[5:9] == bytes((3, 1, 1, 0))
-            and any(item[1] == 0x21 and len(item) >= 9 for item in following)
+        try:
+            records = _validated_interface_records(descriptors, profile)
+        except VerificationError:
+            continue
+        keyboard_records = [
+            (descriptor, following)
+            for descriptor, following in records
+            if descriptor[5:8] == bytes((3, 1, 1))
         ]
-        if not keyboard:
+        if len(keyboard_records) != 1:
+            continue
+        keyboard, keyboard_following = keyboard_records[0]
+        keyboard_hid_descriptors = [item for item in keyboard_following if item[1] == 0x21]
+        if len(keyboard_hid_descriptors) != 1:
+            continue
+        try:
+            _validated_hid_report_length(keyboard_hid_descriptors[0], require_report=False)
+        except VerificationError:
             continue
 
+        raw_records = [record for record in records if record[0] != keyboard]
+        if len(raw_records) != len(profile.interfaces):
+            continue
         matched: list[tuple[str, int, int]] = []
-        for interface_descriptor, following in _interface_records(descriptors):
-            if len(interface_descriptor) < 9 or interface_descriptor[5] != 3:
-                continue
-            hid_descriptors = [item for item in following if item[1] == 0x21 and len(item) >= 9]
-            endpoints = [item for item in following if item[1] == 5 and len(item) >= 7]
-            if not hid_descriptors:
-                continue
-            report_length = hid_descriptors[0][7] | (hid_descriptors[0][8] << 8)
-            for expected in profile.interfaces:
-                if not _find_report_descriptor(binary, report_length, expected):
-                    continue
+        report_offsets: set[int] = set()
+        try:
+            for expected, (interface_descriptor, following) in zip(profile.interfaces, raw_records):
+                if interface_descriptor[5:8] != bytes((3, 0, 0)):
+                    raise VerificationError(
+                        f"USB descriptor contract has a malformed {expected.role} raw interface"
+                    )
+                hid_descriptors = [item for item in following if item[1] == 0x21]
+                if len(hid_descriptors) != 1:
+                    raise VerificationError(
+                        f"USB descriptor contract has no unique {expected.role} HID descriptor"
+                    )
+                report_length = _validated_hid_report_length(hid_descriptors[0], require_report=True)
+                offsets = _matching_report_descriptor_offsets(binary, report_length, expected)
+                if len(offsets) != 1 or offsets[0] in report_offsets:
+                    raise VerificationError(
+                        f"USB descriptor contract has no unique {expected.role} report descriptor"
+                    )
+                report_offsets.add(offsets[0])
+                endpoints = [item for item in following if item[1] == 5 and len(item) >= 7]
                 if interface_descriptor[4] != 2 or len(endpoints) != 2:
                     raise VerificationError(
                         f"USB descriptor contract missing {expected.role} raw interface endpoint pair"
@@ -502,13 +596,13 @@ def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[
                         f"USB descriptor contract has wrong {expected.role} raw interface endpoint pair"
                     )
                 matched.append((expected.role, interface_descriptor[2], expected.report_bytes))
-                break
-
-        if tuple(role for role, _number, _size in matched) == expected_roles:
+        except VerificationError:
+            continue
+        if len(matched) == len(profile.interfaces):
             return {
                 "status": "pass",
                 "configuration_total_length": sum(len(item) for item in descriptors),
-                "keyboard_interface": keyboard[0][2],
+                "keyboard_interface": keyboard[2],
                 "interfaces": [
                     {"role": role, "interface": number, "endpoint_bytes": size}
                     for role, number, size in matched

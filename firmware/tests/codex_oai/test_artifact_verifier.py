@@ -27,8 +27,26 @@ def make_dual_usb_descriptor_fixture(
     oai_interface: bool = True,
     vial_endpoints: bool = True,
     oai_endpoints: bool = True,
+    vial_hid_report_type: int = 0x22,
+    oai_hid_report_type: int = 0x22,
+    vial_input_report_size: int = 8,
+    vial_output_report_size: int = 8,
+    duplicate_vial_report: bool = False,
+    declared_interfaces: int | None = None,
+    extra_interface: bool = False,
+    malformed_interface: bool = False,
 ) -> bytes:
     """Return a compact ELF-derived image with the complete dual HID contract."""
+    vial_report = bytes((
+        6, 0x60, 0xFF, 9, 0x61, 0xA1, 1, 9, 0x62, 0x15, 0,
+        0x26, 0xFF, 0, 0x95, 32, 0x75, vial_input_report_size, 0x81, 2, 9, 0x63,
+        0x95, 32, 0x75, vial_output_report_size, 0x91, 2, 0xC0,
+    ))
+    oai_report = bytes((
+        6, 0, 0xFF, 9, 0x61, 0xA1, 1, 0x85, 6, 9, 0x62, 0x15, 0,
+        0x26, 0xFF, 0, 0x95, 63, 0x75, 8, 0x81, 2, 9, 0x63,
+        0x95, 63, 0x75, 8, 0x91, 2, 0xC0,
+    ))
     keyboard = (
         bytes((9, 4, 0, 0, 1, 3, 1, 1, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, 0x22, 0, 0)),
@@ -36,13 +54,13 @@ def make_dual_usb_descriptor_fixture(
     )
     vial = (
         bytes((9, 4, 1, 0, 2, 3, 0, 0, 0)),
-        bytes((9, 0x21, 0x11, 0x01, 0, 1, 0x22, 27, 0)),
+        bytes((9, 0x21, 0x11, 0x01, 0, 1, vial_hid_report_type, len(vial_report), 0)),
         bytes((7, 5, 2, 3, 32, 0, 1)),
         bytes((7, 5, 0x82, 3, 32, 0, 1)),
     )
     oai = (
         bytes((9, 4, 2, 0, 2, 3, 0, 0, 0)),
-        bytes((9, 0x21, 0x11, 0x01, 0, 1, 0x22, 30, 0)),
+        bytes((9, 0x21, 0x11, 0x01, 0, 1, oai_hid_report_type, len(oai_report), 0)),
         bytes((7, 5, 3, 3, 64, 0, 1)),
         bytes((7, 5, 0x83, 3, 64, 0, 1)),
     )
@@ -55,20 +73,23 @@ def make_dual_usb_descriptor_fixture(
         descriptors.extend(oai[:2])
         if oai_endpoints:
             descriptors.extend(oai[2:])
+    if extra_interface:
+        descriptors.append(bytes((9, 4, 3, 0, 0, 0xFF, 0, 0, 0)))
+    if malformed_interface:
+        descriptors.append(bytes((5, 4, 3, 0, 0)))
     config_body = b"".join(descriptors)
-    configuration = bytes((9, 2)) + struct.pack("<H", 9 + len(config_body)) + bytes((3, 1, 1, 0x80, 50))
-
-    vial_report = bytes((
-        6, 0x60, 0xFF, 9, 0x61, 0xA1, 1, 9, 0x62, 0x15, 0,
-        0x26, 0xFF, 0, 0x95, 32, 0x75, 8, 0x81, 2, 9, 0x63,
-        0x95, 32, 0x91, 2, 0xC0,
-    ))
-    oai_report = bytes((
-        6, 0, 0xFF, 9, 0x61, 0xA1, 1, 0x85, 6, 9, 0x62, 0x15, 0,
-        0x26, 0xFF, 0, 0x95, 63, 0x75, 8, 0x81, 2, 9, 0x63,
-        0x95, 63, 0x91, 2, 0xC0,
-    ))
-    return configuration + config_body + vial_report + oai_report
+    interface_count = declared_interfaces
+    if interface_count is None:
+        interface_count = (
+            1
+            + int(vial_interface)
+            + int(oai_interface)
+            + int(extra_interface)
+            + int(malformed_interface)
+        )
+    configuration = bytes((9, 2)) + struct.pack("<H", 9 + len(config_body)) + bytes((interface_count, 1, 1, 0x80, 50))
+    decoy = b"\x05\x01" + vial_report if duplicate_vial_report else b""
+    return configuration + config_body + vial_report + oai_report + decoy
 
 
 def make_uf2(image: bytes) -> bytes:
@@ -113,7 +134,21 @@ class ArtifactVerifierTest(unittest.TestCase):
     def setUp(self) -> None:
         self.work = tempfile.TemporaryDirectory(prefix="agentpad13_artifact_test_")
         self.root = Path(self.work.name)
-        self.elf_binary = bytes(range(256)) + make_dual_usb_descriptor_fixture() + b"agentpad13 direct oai fixture\n"
+        self.elf_binary = (
+            bytes(range(256))
+            + make_dual_usb_descriptor_fixture(vial_interface=False)
+            + b"agentpad13 direct oai fixture\n"
+        )
+        self.vial_elf_binary = (
+            bytes(range(256))
+            + make_dual_usb_descriptor_fixture(oai_interface=False)
+            + b"agentpad13 vial oai fixture\n"
+        )
+        self.dual_elf_binary = (
+            bytes(range(256))
+            + make_dual_usb_descriptor_fixture()
+            + b"agentpad13 dual oai fixture\n"
+        )
         self.uf2_image = self.elf_binary + bytes(
             (-len(self.elf_binary)) % UF2_PAYLOAD_SIZE
         )
@@ -121,7 +156,23 @@ class ArtifactVerifierTest(unittest.TestCase):
         self.good_uf2.write_bytes(make_uf2(self.uf2_image))
         self.good_elf = self.root / "loudest_micro_codex_oai.elf"
         self.good_elf.write_bytes(b"ELF fixture\n")
+        self.good_vial_uf2 = self.root / "loudest_micro_vial_oai.uf2"
+        self.good_vial_uf2.write_bytes(
+            make_uf2(
+                self.vial_elf_binary
+                + bytes((-len(self.vial_elf_binary)) % UF2_PAYLOAD_SIZE)
+            )
+        )
+        self.good_dual_uf2 = self.root / "loudest_micro_vial_oai_dual.uf2"
+        self.good_dual_uf2.write_bytes(
+            make_uf2(
+                self.dual_elf_binary
+                + bytes((-len(self.dual_elf_binary)) % UF2_PAYLOAD_SIZE)
+            )
+        )
         uf2_bytes = self.good_uf2.read_bytes()
+        vial_uf2_bytes = self.good_vial_uf2.read_bytes()
+        dual_uf2_bytes = self.good_dual_uf2.read_bytes()
         self.good_evidence = {
             "usb_enumerated": True,
             "keyboard_hid_enumerated": True,
@@ -149,6 +200,8 @@ class ArtifactVerifierTest(unittest.TestCase):
             "report_bytes": 32,
             "vial_protocol_ack": True,
             "vial_default_k00": 0x7E02,
+            "uf2_sha256": hashlib.sha256(vial_uf2_bytes).hexdigest(),
+            "uf2_size_bytes": len(vial_uf2_bytes),
         }
         self.good_dual_evidence = {
             **self.good_evidence,
@@ -166,6 +219,8 @@ class ArtifactVerifierTest(unittest.TestCase):
             "vial_protocol_ack": True,
             "channels_isolated": True,
             "vial_default_k00": 0x7E02,
+            "uf2_sha256": hashlib.sha256(dual_uf2_bytes).hexdigest(),
+            "uf2_size_bytes": len(dual_uf2_bytes),
         }
         self.verifier = load_verifier()
 
@@ -197,18 +252,24 @@ class ArtifactVerifierTest(unittest.TestCase):
         elf_binary: bytes | None = None,
         profile: str = "direct",
     ):
+        defaults = {
+            "direct": (self.good_uf2, self.elf_binary, self.good_evidence),
+            "vial": (self.good_vial_uf2, self.vial_elf_binary, self.good_vial_evidence),
+            "dual": (self.good_dual_uf2, self.dual_elf_binary, self.good_dual_evidence),
+        }
+        default_uf2, default_elf_binary, default_evidence = defaults[profile]
         with mock.patch.object(
             self.verifier.subprocess, "check_output", side_effect=self._tool_output
         ), mock.patch.object(
             self.verifier,
             "elf_binary",
-            return_value=self.elf_binary if elf_binary is None else elf_binary,
+            return_value=default_elf_binary if elf_binary is None else elf_binary,
             create=True,
         ):
             return self.verifier.verify(
-                uf2 or self.good_uf2,
+                uf2 or default_uf2,
                 elf or self.good_elf,
-                evidence or self.good_evidence,
+                evidence or default_evidence,
                 profile=profile,
             )
 
@@ -309,6 +370,50 @@ class ArtifactVerifierTest(unittest.TestCase):
             ("missing oai interface", {"oai_interface": False}),
             ("missing vial endpoint pair", {"vial_endpoints": False}),
             ("missing oai endpoint pair", {"oai_endpoints": False}),
+        )
+        for name, options in cases:
+            with self.subTest(name=name):
+                fixture = make_dual_usb_descriptor_fixture(**options)
+                with mock.patch.object(self.verifier, "elf_binary", return_value=fixture):
+                    with self.assertRaisesRegex(self.verifier.VerificationError, "USB descriptor"):
+                        self.verifier.verify_usb_descriptor_contract(
+                            self.good_elf, self.verifier.DUAL_PROFILE
+                        )
+
+    def test_dual_static_descriptor_contract_rejects_ambiguous_or_mistyped_hid_reports(self) -> None:
+        cases = (
+            ("duplicate vial report", {"duplicate_vial_report": True}),
+            ("wrong vial report descriptor type", {"vial_hid_report_type": 0x23}),
+            ("wrong oai report descriptor type", {"oai_hid_report_type": 0x23}),
+        )
+        for name, options in cases:
+            with self.subTest(name=name):
+                fixture = make_dual_usb_descriptor_fixture(**options)
+                with mock.patch.object(self.verifier, "elf_binary", return_value=fixture):
+                    with self.assertRaisesRegex(self.verifier.VerificationError, "USB descriptor"):
+                        self.verifier.verify_usb_descriptor_contract(
+                            self.good_elf, self.verifier.DUAL_PROFILE
+                        )
+
+    def test_dual_static_descriptor_contract_rejects_non_byte_sized_input_or_output(self) -> None:
+        cases = (
+            ("one-bit vial input", {"vial_input_report_size": 1}),
+            ("one-bit vial output", {"vial_output_report_size": 1}),
+        )
+        for name, options in cases:
+            with self.subTest(name=name):
+                fixture = make_dual_usb_descriptor_fixture(**options)
+                with mock.patch.object(self.verifier, "elf_binary", return_value=fixture):
+                    with self.assertRaisesRegex(self.verifier.VerificationError, "USB descriptor"):
+                        self.verifier.verify_usb_descriptor_contract(
+                            self.good_elf, self.verifier.DUAL_PROFILE
+                        )
+
+    def test_dual_static_descriptor_contract_requires_exact_interface_cardinality(self) -> None:
+        cases = (
+            ("wrong declared interface count", {"declared_interfaces": 2}),
+            ("extra interface", {"extra_interface": True}),
+            ("malformed interface", {"malformed_interface": True, "declared_interfaces": 3}),
         )
         for name, options in cases:
             with self.subTest(name=name):
