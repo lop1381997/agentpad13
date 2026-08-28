@@ -31,21 +31,39 @@ def make_dual_usb_descriptor_fixture(
     oai_hid_report_type: int = 0x22,
     vial_input_report_size: int = 8,
     vial_output_report_size: int = 8,
+    vial_interface_number: int = 1,
+    oai_interface_number: int | None = None,
+    vial_alternate_setting: int = 0,
+    oai_alternate_setting: int = 0,
+    vial_root_usage: int = 0x61,
+    oai_root_usage: int = 0x61,
+    oai_report_id: int = 6,
+    swap_raw_interface_order: bool = False,
     duplicate_vial_report: bool = False,
+    unexpected_vendor_report: bool = False,
     declared_interfaces: int | None = None,
     extra_interface: bool = False,
     malformed_interface: bool = False,
 ) -> bytes:
     """Return a compact ELF-derived image with the complete dual HID contract."""
+    if oai_interface_number is None:
+        oai_interface_number = 2 if vial_interface else 1
+    vial_body_usage = (9, 0x61) if vial_root_usage != 0x61 else ()
     vial_report = bytes((
-        6, 0x60, 0xFF, 9, 0x61, 0xA1, 1, 9, 0x62, 0x15, 0,
+        6, 0x60, 0xFF, 9, vial_root_usage, 0xA1, 1, *vial_body_usage, 9, 0x62, 0x15, 0,
         0x26, 0xFF, 0, 0x95, 32, 0x75, vial_input_report_size, 0x81, 2, 9, 0x63,
         0x95, 32, 0x75, vial_output_report_size, 0x91, 2, 0xC0,
     ))
     oai_report = bytes((
-        6, 0, 0xFF, 9, 0x61, 0xA1, 1, 0x85, 6, 9, 0x62, 0x15, 0,
+        6, 0, 0xFF, 9, oai_root_usage, 0xA1, 1, 0x85, oai_report_id,
+        *((9, 0x61) if oai_root_usage != 0x61 else ()), 9, 0x62, 0x15, 0,
         0x26, 0xFF, 0, 0x95, 63, 0x75, 8, 0x81, 2, 9, 0x63,
         0x95, 63, 0x75, 8, 0x91, 2, 0xC0,
+    ))
+    unexpected_report = bytes((
+        6, 1, 0xFF, 9, 0x61, 0xA1, 1, 9, 0x62, 0x15, 0,
+        0x26, 0xFF, 0, 0x95, 16, 0x75, 8, 0x81, 2, 9, 0x63,
+        0x95, 16, 0x75, 8, 0x91, 2, 0xC0,
     ))
     keyboard = (
         bytes((9, 4, 0, 0, 1, 3, 1, 1, 0)),
@@ -53,26 +71,27 @@ def make_dual_usb_descriptor_fixture(
         bytes((7, 5, 0x81, 3, 8, 0, 10)),
     )
     vial = (
-        bytes((9, 4, 1, 0, 2, 3, 0, 0, 0)),
+        bytes((9, 4, vial_interface_number, vial_alternate_setting, 2, 3, 0, 0, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, vial_hid_report_type, len(vial_report), 0)),
         bytes((7, 5, 2, 3, 32, 0, 1)),
         bytes((7, 5, 0x82, 3, 32, 0, 1)),
     )
     oai = (
-        bytes((9, 4, 2, 0, 2, 3, 0, 0, 0)),
+        bytes((9, 4, oai_interface_number, oai_alternate_setting, 2, 3, 0, 0, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, oai_hid_report_type, len(oai_report), 0)),
         bytes((7, 5, 3, 3, 64, 0, 1)),
         bytes((7, 5, 0x83, 3, 64, 0, 1)),
     )
     descriptors = list(keyboard)
+    raw_descriptors = []
     if vial_interface:
-        descriptors.extend(vial[:2])
-        if vial_endpoints:
-            descriptors.extend(vial[2:])
+        raw_descriptors.append(vial[:2] + (vial[2:] if vial_endpoints else ()))
     if oai_interface:
-        descriptors.extend(oai[:2])
-        if oai_endpoints:
-            descriptors.extend(oai[2:])
+        raw_descriptors.append(oai[:2] + (oai[2:] if oai_endpoints else ()))
+    if swap_raw_interface_order:
+        raw_descriptors.reverse()
+    for raw_interface in raw_descriptors:
+        descriptors.extend(raw_interface)
     if extra_interface:
         descriptors.append(bytes((9, 4, 3, 0, 0, 0xFF, 0, 0, 0)))
     if malformed_interface:
@@ -89,7 +108,14 @@ def make_dual_usb_descriptor_fixture(
         )
     configuration = bytes((9, 2)) + struct.pack("<H", 9 + len(config_body)) + bytes((interface_count, 1, 1, 0x80, 50))
     decoy = b"\x05\x01" + vial_report if duplicate_vial_report else b""
-    return configuration + config_body + vial_report + oai_report + decoy
+    reports = b""
+    if vial_interface:
+        reports += vial_report
+    if oai_interface:
+        reports += oai_report
+    if unexpected_vendor_report:
+        reports += unexpected_report
+    return configuration + config_body + reports + decoy
 
 
 def make_uf2(image: bytes) -> bytes:
@@ -383,8 +409,37 @@ class ArtifactVerifierTest(unittest.TestCase):
     def test_dual_static_descriptor_contract_rejects_ambiguous_or_mistyped_hid_reports(self) -> None:
         cases = (
             ("duplicate vial report", {"duplicate_vial_report": True}),
+            ("unexpected vendor raw collection", {"unexpected_vendor_report": True}),
+            ("wrong Vial application usage", {"vial_root_usage": 0x62}),
+            ("wrong OAI application usage", {"oai_root_usage": 0x62}),
+            ("wrong OAI report ID", {"oai_report_id": 7}),
             ("wrong vial report descriptor type", {"vial_hid_report_type": 0x23}),
             ("wrong oai report descriptor type", {"oai_hid_report_type": 0x23}),
+        )
+        for name, options in cases:
+            with self.subTest(name=name):
+                fixture = make_dual_usb_descriptor_fixture(**options)
+                with mock.patch.object(self.verifier, "elf_binary", return_value=fixture):
+                    with self.assertRaisesRegex(self.verifier.VerificationError, "USB descriptor"):
+                        self.verifier.verify_usb_descriptor_contract(
+                            self.good_elf, self.verifier.DUAL_PROFILE
+                        )
+
+    def test_dual_static_descriptor_contract_requires_exact_interface_ids_and_roles(self) -> None:
+        cases = (
+            ("Vial interface incorrectly uses keyboard ID 0", {"vial_interface_number": 0}),
+            ("unexpected OAI interface 99", {"oai_interface_number": 99}),
+            (
+                "swapped Vial and OAI interface IDs",
+                {"vial_interface_number": 2, "oai_interface_number": 1},
+            ),
+            ("duplicate raw interface ID", {"oai_interface_number": 1}),
+            (
+                "missing required raw interface ID 1",
+                {"vial_interface_number": 2, "oai_interface_number": 3},
+            ),
+            ("swapped raw interface descriptor order", {"swap_raw_interface_order": True}),
+            ("nonzero Vial alternate setting", {"vial_alternate_setting": 1}),
         )
         for name, options in cases:
             with self.subTest(name=name):
