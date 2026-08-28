@@ -202,13 +202,52 @@ const vialSetup = runner.reportDescriptorSetup(vial.number, vial.reportBytes);
 const oaiSetup = runner.reportDescriptorSetup(oai.number, oai.reportBytes);
 const vialFrame = Buffer.alloc(32); vialFrame[0] = 0x01;
 const oaiFrame = Buffer.alloc(64); oaiFrame[0] = 6; oaiFrame[1] = 2;
-if (!oai || !vial || oai.number === vial.number || oai.inEp === vial.inEp ||
+const reports = new Map([[oai.number, oai.report]]);
+const sharedOutOai = { ...oai, outEp: vial.outEp };
+if (!oai || !vial || !runner.hasDistinctRawEndpointPairs(vial, oai) ||
+    runner.hasDistinctRawEndpointPairs(vial, sharedOutOai) ||
     vial.reportId !== null || oai.reportId !== 6 ||
     vialSetup.wIndex !== 1 || oaiSetup.wIndex !== 2 ||
     !runner.reportDescriptorMatches(vial.report, { usage: 'ff60:0061', report_id: null, report_bytes: 32 }) ||
     !runner.reportDescriptorMatches(oai.report, { usage: 'ff00:0061', report_id: 6, report_bytes: 64 }) ||
+    !runner.oaiHidEnumerated(oai, reports, [1, 2]) ||
+    runner.oaiHidEnumerated(oai, reports, [1]) ||
+    runner.oaiHidEnumerated({ ...oai, number: 1 }, reports, [1, 2]) ||
     runner.routeFrame(vialFrame, { vial, oai }) !== 'vial' ||
     runner.routeFrame(oaiFrame, { vial, oai }) !== 'oai') process.exit(1);
+'''
+        subprocess.run(["node", "-e", script], cwd=EMULATOR, check=True)
+
+    def test_dual_config_prefix_gates_recovery_without_overwriting_parsed_data(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is unavailable")
+        script = r'''
+const runner = require('./dual_oai_vial_runner.cjs');
+const prefix = Buffer.from([
+  9, 2, 0x70, 0, 3, 1, 0, 0x80, 50,
+  9, 4, 0, 0, 1, 3, 1, 1, 0, 9, 0x21, 0x11, 1, 0, 1, 0x22, 0x44, 0,
+  7, 5, 0x81, 3, 8, 0, 10,
+  9, 4, 1, 0, 2, 3, 0, 0, 0, 9, 0x21, 0x11, 1, 0, 1, 0x22, 0x20, 0,
+  7, 5, 0x82, 3, 32, 0, 1,
+]);
+const invalidHeader = Buffer.from(prefix); invalidHeader[4] = 2;
+const invalidVial = Buffer.from(prefix); invalidVial[57] = 64;
+const interfaces = runner.parseConfig(prefix);
+const recovery = runner.recoverTruncatedConfig(interfaces, { complete: false, prefixValidated: true });
+const parsed = [
+  { number: 0, cls: 3, sub: 1, proto: 1, inEp: 1, outEp: -1, inBytes: 8, outBytes: 0, reportBytes: 68 },
+  { number: 1, cls: 3, sub: 0, proto: 0, inEp: 2, outEp: 3, inBytes: 32, outBytes: 32, reportBytes: 32 },
+  { number: 2, cls: 3, sub: 0, proto: 0, inEp: 9, outEp: 10, inBytes: 64, outBytes: 64, reportBytes: 38 },
+];
+const snapshot = JSON.stringify(parsed);
+const preserved = runner.recoverTruncatedConfig(parsed, { complete: false, prefixValidated: true });
+const blocked = runner.recoverTruncatedConfig(runner.parseConfig(prefix), { complete: false, prefixValidated: false });
+if (!runner.hasValidatedDualConfigPrefix(prefix) || runner.hasValidatedDualConfigPrefix(invalidHeader) ||
+    runner.hasValidatedDualConfigPrefix(invalidVial) || !recovery.used ||
+    !recovery.syntheticOaiEndpoint || recovery.syntheticOaiEndpoint.interface_number !== 2 ||
+    recovery.syntheticOaiEndpoint.in_endpoint !== 4 || recovery.syntheticOaiEndpoint.out_endpoint !== 5 ||
+    !recovery.syntheticOaiEndpoint.not_descriptor_proof || preserved.used ||
+    JSON.stringify(parsed) !== snapshot || blocked.used) process.exit(1);
 '''
         subprocess.run(["node", "-e", script], cwd=EMULATOR, check=True)
 
@@ -231,6 +270,7 @@ if (!oai || !vial || oai.number === vial.number || oai.inEp === vial.inEp ||
             {"usage": "ff00:0061", "report_id": 6, "report_bytes": 64},
         )
         self.assertTrue(evidence["vial_protocol_ack"])
+        self.assertTrue(evidence["oai_hid_enumerated"])
         self.assertTrue(evidence["rgbcfg_ack"])
         self.assertTrue(evidence["thstatus_ack"])
         self.assertTrue(evidence["device_status_ack"])
@@ -239,6 +279,23 @@ if (!oai || !vial || oai.number === vial.number || oai.inEp === vial.inEp ||
         self.assertNotEqual(
             evidence["vial_endpoint"]["in_endpoint"], evidence["oai_endpoint"]["in_endpoint"]
         )
+        self.assertNotEqual(
+            evidence["vial_endpoint"]["out_endpoint"], evidence["oai_endpoint"]["out_endpoint"]
+        )
+        self.assertIn("config_descriptor_recovery_used", evidence)
+        self.assertIn("synthetic_oai_endpoint", evidence)
+        if evidence["config_descriptor_recovery_used"]:
+            self.assertEqual(
+                evidence["synthetic_oai_endpoint"],
+                {
+                    "interface_number": 2,
+                    "in_endpoint": 4,
+                    "out_endpoint": 5,
+                    "not_descriptor_proof": True,
+                },
+            )
+        else:
+            self.assertIsNone(evidence["synthetic_oai_endpoint"])
         self.assertEqual(evidence["uf2_size_bytes"], DUAL_OAI_VIAL_UF2.stat().st_size)
         self.assertEqual(
             evidence["uf2_sha256"], hashlib.sha256(DUAL_OAI_VIAL_UF2.read_bytes()).hexdigest()

@@ -174,24 +174,65 @@ function keyboardHid(interfaces) {
   return interfaces.find((iface) => iface.cls === 3 && iface.sub === 1 && iface.proto === 1 && iface.inEp >= 0);
 }
 
+function hasValidatedDualConfigPrefix(desc) {
+  if (desc.length < 9 || desc[0] !== 9 || desc[1] !== DescriptorType.Configration || desc[4] !== 3) return false;
+  const interfaces = parseConfig(desc);
+  const keyboard = interfaces.find((iface) =>
+    iface.number === 0 && iface.cls === 3 && iface.sub === 1 && iface.proto === 1 && iface.inEp >= 0
+  );
+  const vial = interfaces.find((iface) =>
+    iface.number === 1 && iface.cls === 3 && iface.sub === 0 && iface.proto === 0 &&
+    iface.inEp >= 0 && iface.inBytes === VIAL_REPORT_BYTES
+  );
+  return Boolean(keyboard && vial);
+}
+
 function vendorHids(interfaces) {
   return interfaces.filter((iface) => iface.cls === 3 && iface.proto === 0 && iface.inEp >= 0 && iface.outEp >= 0);
 }
 
-function recoverTruncatedOai(interfaces, complete) {
-  if (complete) return;
-  let oai = interfaces.find((iface) => iface.number === 2);
-  if (!oai) {
-    oai = {
+function recoverTruncatedConfig(interfaces, { complete, prefixValidated }) {
+  const recovery = { used: false, syntheticVialOutEndpoint: null, syntheticOaiEndpoint: null };
+  if (complete || !prefixValidated) return recovery;
+  const vial = interfaces.find((iface) => iface.number === 1);
+  if (vial && vial.outEp < 0) {
+    // rp2040js stops after the Vial IN endpoint. ChibiOS places Vial OUT next;
+    // only fill this absent endpoint and record that it is not descriptor proof.
+    vial.outEp = vial.inEp + 1;
+    vial.outBytes = VIAL_REPORT_BYTES;
+    recovery.used = true;
+    recovery.syntheticVialOutEndpoint = {
+      interface_number: 1,
+      out_endpoint: vial.outEp,
+      not_descriptor_proof: true,
+    };
+  }
+  if (!interfaces.some((iface) => iface.number === 2)) {
+    interfaces.push({
       number: 2, cls: 3, sub: 0, proto: 0, inEp: -1, outEp: -1,
       inBytes: OAI_REPORT_BYTES, outBytes: OAI_REPORT_BYTES, reportBytes: 0,
+    });
+    const oai = interfaces[interfaces.length - 1];
+    // The Task-3 ELF verifier proves this ChibiOS allocation. This synthetic
+    // runtime endpoint is solely an emulator transport recovery, never
+    // configuration-descriptor proof.
+    oai.inEp = OAI_RAW_IN_EPNUM;
+    oai.outEp = OAI_RAW_OUT_EPNUM;
+    recovery.used = true;
+    recovery.syntheticOaiEndpoint = {
+      interface_number: 2,
+      in_endpoint: OAI_RAW_IN_EPNUM,
+      out_endpoint: OAI_RAW_OUT_EPNUM,
+      not_descriptor_proof: true,
     };
-    interfaces.push(oai);
   }
-  oai.inEp = OAI_RAW_IN_EPNUM;
-  oai.outEp = OAI_RAW_OUT_EPNUM;
-  oai.inBytes = OAI_REPORT_BYTES;
-  oai.outBytes = OAI_REPORT_BYTES;
+  return recovery;
+}
+
+function hasDistinctRawEndpointPairs(vial, oai) {
+  return Boolean(vial && oai && vial.number !== oai.number &&
+    vial.inEp >= 0 && oai.inEp >= 0 && vial.outEp >= 0 && oai.outEp >= 0 &&
+    vial.inEp !== oai.inEp && vial.outEp !== oai.outEp);
 }
 
 function readOaiFrame(frame) {
@@ -222,6 +263,13 @@ function reportDescriptorMatches(report, expected) {
   const usagePage = parseInt(expected.usage.split(':')[0], 16);
   return parsed.usagePage === usagePage && parsed.usage === 0x61 &&
     parsed.reportId === expected.report_id && parsed.reportCounts.includes(payload);
+}
+
+function oaiHidEnumerated(oai, reportDescriptors, reportDescriptorRequests) {
+  return Boolean(oai && oai.number === 2 && reportDescriptorRequests.includes(2) &&
+    reportDescriptors.has(2) && reportDescriptorMatches(reportDescriptors.get(2), {
+      usage: 'ff00:0061', report_id: OAI_REPORT_ID, report_bytes: OAI_REPORT_BYTES,
+    }));
 }
 
 function main() {
@@ -264,6 +312,7 @@ function main() {
   let configLength = 0;
   const configBytes = [];
   let interfaces = [];
+  let configRecovery = { used: false, syntheticVialOutEndpoint: null, syntheticOaiEndpoint: null };
   const reportDescriptors = new Map();
   let reportDescriptorTarget = null;
   let reportDescriptorDone = false;
@@ -294,7 +343,10 @@ function main() {
           configured = true;
           enumState = 'configured';
           interfaces = parseConfig(Buffer.from(configBytes));
-          recoverTruncatedOai(interfaces, configBytes.length >= configLength);
+          configRecovery = recoverTruncatedConfig(interfaces, {
+            complete: configBytes.length >= configLength,
+            prefixValidated: hasValidatedDualConfigPrefix(Buffer.from(configBytes)),
+          });
         }
         return;
       }
@@ -309,8 +361,10 @@ function main() {
       } else if (enumState === 'config') {
         configBytes.push(...bytes);
         interfaces = parseConfig(Buffer.from(configBytes));
-        if (configBytes.length >= configLength || (keyboardHid(interfaces) && vendorHids(interfaces).length > 0)) {
-          recoverTruncatedOai(interfaces, configBytes.length >= configLength);
+        const complete = configBytes.length >= configLength;
+        const prefixValidated = hasValidatedDualConfigPrefix(Buffer.from(configBytes));
+        if (complete || prefixValidated) {
+          configRecovery = recoverTruncatedConfig(interfaces, { complete, prefixValidated });
           enumState = 'set-configuration';
           usb.sendSetupPacket(setDeviceConfigurationPacket(1));
         }
@@ -417,7 +471,7 @@ function main() {
   const hidDescriptors = candidates.map((candidate) => ({ ...candidate, report: reportDescriptors.get(candidate.number) }));
   const vial = hidByReportDescriptor(hidDescriptors, { usagePage: 0xff60, reportId: null, reportBytes: VIAL_REPORT_BYTES });
   const oai = hidByReportDescriptor(hidDescriptors, { usagePage: 0xff00, reportId: OAI_REPORT_ID, reportBytes: OAI_REPORT_BYTES });
-  if (!vial || !oai || vial.number === oai.number || vial.inEp === oai.inEp) throw new Error('dual HID interfaces are not distinct');
+  if (!hasDistinctRawEndpointPairs(vial, oai)) throw new Error('dual HID endpoint pairs are not distinct');
   if (vial.number !== 1 || oai.number !== 2) throw new Error('unexpected dual HID interface order');
   vial.kind = 'vial';
   oai.kind = 'oai';
@@ -488,7 +542,11 @@ function main() {
     vial_endpoint: { number: vial.number, in_endpoint: vial.inEp, out_endpoint: vial.outEp, in_bytes: vial.inBytes, out_bytes: vial.outBytes },
     oai_endpoint: { number: oai.number, in_endpoint: oai.inEp, out_endpoint: oai.outEp, in_bytes: oai.inBytes, out_bytes: oai.outBytes },
     report_descriptor_requests: reportDescriptorRequests,
+    config_descriptor_recovery_used: configRecovery.used,
+    synthetic_vial_out_endpoint: configRecovery.syntheticVialOutEndpoint,
+    synthetic_oai_endpoint: configRecovery.syntheticOaiEndpoint,
     keyboard_hid_enumerated: true,
+    oai_hid_enumerated: oaiHidEnumerated(oai, reportDescriptors, reportDescriptorRequests),
     descriptor_verified: reportDescriptorMatches(reportDescriptors.get(vial.number), vialEvidence) && reportDescriptorMatches(reportDescriptors.get(oai.number), oaiEvidence),
     vial_protocol_ack: vialProtocolAck,
     vial_default_k00: vialDefaultK00,
@@ -508,7 +566,7 @@ function main() {
   console.log(JSON.stringify(evidence));
   const checks = [
     evidence.vid_pid === '303a:8360', evidence.descriptor_verified,
-    evidence.keyboard_hid_enumerated, evidence.vial_protocol_ack,
+    evidence.keyboard_hid_enumerated, evidence.oai_hid_enumerated, evidence.vial_protocol_ack,
     evidence.vial_default_k00 !== null, evidence.rgbcfg_ack,
     evidence.thstatus_ack, evidence.device_status_ack,
     evidence.task_status_fragment_count > 1, evidence.key_event !== null,
@@ -522,10 +580,15 @@ module.exports = {
   main,
   oaiReport,
   oaiReports,
+  parseConfig,
   parseReportDescriptor,
   hidByReportDescriptor,
   reportDescriptorSetup,
   reportDescriptorMatches,
+  hasValidatedDualConfigPrefix,
+  recoverTruncatedConfig,
+  hasDistinctRawEndpointPairs,
+  oaiHidEnumerated,
   routeFrame,
   readOaiMessages,
 };

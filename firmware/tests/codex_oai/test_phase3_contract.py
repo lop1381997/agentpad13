@@ -111,6 +111,7 @@ class Phase3ReleaseContractTest(unittest.TestCase):
         self.assertEqual(evidence["uf2_sha256"], digest)
         self.assertEqual(evidence["oai_interface"], {"usage": "ff00:0061", "report_id": 6, "report_bytes": 64})
         self.assertEqual(evidence["vial_interface"], {"usage": "ff60:0061", "report_id": None, "report_bytes": 32})
+        self.assertTrue(evidence["oai_hid_enumerated"])
         self.assertTrue(evidence["vial_protocol_ack"])
         self.assertTrue(evidence["channels_isolated"])
         self.assertEqual(manifest["target"], "loudest_micro:vial_oai")
