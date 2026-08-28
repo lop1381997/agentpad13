@@ -35,6 +35,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 KEYBOARD_SOURCE = REPO_ROOT / "firmware" / KEYBOARD_NAME
 OAI_ARTIFACT = REPO_ROOT / "release" / "firmware" / "prebuilt" / "agentpad13_codex_oai.uf2"
 VIAL_OAI_ARTIFACT = REPO_ROOT / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2"
+DUAL_OAI_VIAL_ARTIFACT = REPO_ROOT / "release" / "firmware" / "prebuilt" / "agentpad13_oai_vial_dual.uf2"
+DUAL_OAI_VIAL_DEFINITION = REPO_ROOT / "release" / "firmware" / "prebuilt" / "agentpad13_oai_vial_dual.vial"
 VIA_COMMAND_PATCH = REPO_ROOT / "firmware" / "patches" / "0001-via-command-kb-backport.patch"
 OAI_DESCRIPTOR_PATCH = REPO_ROOT / "firmware" / "patches" / "0002-raw-hid-report-id-chibios.patch"
 DUAL_RAW_HID_PATCH = REPO_ROOT / "firmware" / "patches" / "0003-dual-raw-hid-chibios.patch"
@@ -418,10 +420,10 @@ def run_build(qmk_home: Path, keymap: str, *, clean: bool) -> Path:
     return artifact
 
 
-def publish_oai_uf2(source: Path, destination: Path = OAI_ARTIFACT) -> None:
-    """Atomically replace one generated OAI artifact at its exact destination."""
+def _publish_regular_file(source: Path, destination: Path, *, label: str) -> None:
+    """Atomically replace one repository-owned published file."""
     if not source.is_file() or source.is_symlink():
-        raise BuildError(f"refusing to publish a non-regular artifact: {source}")
+        raise BuildError(f"refusing to publish a non-regular {label}: {source}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary_path: Path | None = None
     try:
@@ -439,6 +441,16 @@ def publish_oai_uf2(source: Path, destination: Path = OAI_ARTIFACT) -> None:
             temporary_path.unlink()
 
 
+def publish_oai_uf2(source: Path, destination: Path = OAI_ARTIFACT) -> None:
+    """Atomically replace one generated OAI UF2 at its exact destination."""
+    _publish_regular_file(source, destination, label="artifact")
+
+
+def publish_oai_definition(source: Path, destination: Path = DUAL_OAI_VIAL_DEFINITION) -> None:
+    """Atomically publish the Vial definition paired with the combined UF2."""
+    _publish_regular_file(source, destination, label="definition")
+
+
 def build_all(qmk_home: Path, *, clean: bool) -> None:
     """Validate, stage, lint, compile and publish without touching hardware."""
     validate_qmk_home(qmk_home)
@@ -452,7 +464,11 @@ def build_all(qmk_home: Path, *, clean: bool) -> None:
         run_lint(qmk_home)
         artifacts = {keymap: run_build(qmk_home, keymap, clean=clean) for keymap in KEYMAPS}
         publish_oai_uf2(artifacts["codex_oai"])
-        publish_oai_uf2(artifacts["vial_oai"], VIAL_OAI_ARTIFACT)
+        publish_oai_uf2(artifacts["vial_oai"], DUAL_OAI_VIAL_ARTIFACT)
+        publish_oai_definition(
+            KEYBOARD_SOURCE / "keymaps" / "vial_oai" / "vial.json",
+            DUAL_OAI_VIAL_DEFINITION,
+        )
     finally:
         cleanup_keyboard_link(link, expected_target=KEYBOARD_SOURCE)
     print("flash operations 0")

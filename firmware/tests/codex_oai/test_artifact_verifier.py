@@ -21,6 +21,56 @@ UF2_PAYLOAD_SIZE = 256
 UF2_FLASH_BASE = 0x10000000
 
 
+def make_dual_usb_descriptor_fixture(
+    *,
+    vial_interface: bool = True,
+    oai_interface: bool = True,
+    vial_endpoints: bool = True,
+    oai_endpoints: bool = True,
+) -> bytes:
+    """Return a compact ELF-derived image with the complete dual HID contract."""
+    keyboard = (
+        bytes((9, 4, 0, 0, 1, 3, 1, 1, 0)),
+        bytes((9, 0x21, 0x11, 0x01, 0, 1, 0x22, 0, 0)),
+        bytes((7, 5, 0x81, 3, 8, 0, 10)),
+    )
+    vial = (
+        bytes((9, 4, 1, 0, 2, 3, 0, 0, 0)),
+        bytes((9, 0x21, 0x11, 0x01, 0, 1, 0x22, 27, 0)),
+        bytes((7, 5, 2, 3, 32, 0, 1)),
+        bytes((7, 5, 0x82, 3, 32, 0, 1)),
+    )
+    oai = (
+        bytes((9, 4, 2, 0, 2, 3, 0, 0, 0)),
+        bytes((9, 0x21, 0x11, 0x01, 0, 1, 0x22, 30, 0)),
+        bytes((7, 5, 3, 3, 64, 0, 1)),
+        bytes((7, 5, 0x83, 3, 64, 0, 1)),
+    )
+    descriptors = list(keyboard)
+    if vial_interface:
+        descriptors.extend(vial[:2])
+        if vial_endpoints:
+            descriptors.extend(vial[2:])
+    if oai_interface:
+        descriptors.extend(oai[:2])
+        if oai_endpoints:
+            descriptors.extend(oai[2:])
+    config_body = b"".join(descriptors)
+    configuration = bytes((9, 2)) + struct.pack("<H", 9 + len(config_body)) + bytes((3, 1, 1, 0x80, 50))
+
+    vial_report = bytes((
+        6, 0x60, 0xFF, 9, 0x61, 0xA1, 1, 9, 0x62, 0x15, 0,
+        0x26, 0xFF, 0, 0x95, 32, 0x75, 8, 0x81, 2, 9, 0x63,
+        0x95, 32, 0x91, 2, 0xC0,
+    ))
+    oai_report = bytes((
+        6, 0, 0xFF, 9, 0x61, 0xA1, 1, 0x85, 6, 9, 0x62, 0x15, 0,
+        0x26, 0xFF, 0, 0x95, 63, 0x75, 8, 0x81, 2, 9, 0x63,
+        0x95, 63, 0x91, 2, 0xC0,
+    ))
+    return configuration + config_body + vial_report + oai_report
+
+
 def make_uf2(image: bytes) -> bytes:
     if len(image) % UF2_PAYLOAD_SIZE:
         raise ValueError("test UF2 image must contain complete payload blocks")
@@ -63,7 +113,7 @@ class ArtifactVerifierTest(unittest.TestCase):
     def setUp(self) -> None:
         self.work = tempfile.TemporaryDirectory(prefix="agentpad13_artifact_test_")
         self.root = Path(self.work.name)
-        self.elf_binary = bytes(range(256)) + b"agentpad13 direct oai fixture\n"
+        self.elf_binary = bytes(range(256)) + make_dual_usb_descriptor_fixture() + b"agentpad13 direct oai fixture\n"
         self.uf2_image = self.elf_binary + bytes(
             (-len(self.elf_binary)) % UF2_PAYLOAD_SIZE
         )
@@ -100,6 +150,23 @@ class ArtifactVerifierTest(unittest.TestCase):
             "vial_protocol_ack": True,
             "vial_default_k00": 0x7E02,
         }
+        self.good_dual_evidence = {
+            **self.good_evidence,
+            "vid_pid": "303a:8360",
+            "oai_interface": {
+                "usage": "ff00:0061",
+                "report_id": 6,
+                "report_bytes": 64,
+            },
+            "vial_interface": {
+                "usage": "ff60:0061",
+                "report_id": None,
+                "report_bytes": 32,
+            },
+            "vial_protocol_ack": True,
+            "channels_isolated": True,
+            "vial_default_k00": 0x7E02,
+        }
         self.verifier = load_verifier()
 
     def tearDown(self) -> None:
@@ -111,6 +178,7 @@ class ArtifactVerifierTest(unittest.TestCase):
         if command[0].endswith("-nm"):
             return (
                 "00000000 T raw_hid_receive\n"
+                "00000000 T oai_raw_hid_receive\n"
                 "00000000 T codex_oai_notify\n"
                 "00000000 T codex_led_render\n"
                 "00000000 T encoder_update_user\n"
@@ -186,6 +254,81 @@ class ArtifactVerifierTest(unittest.TestCase):
         evidence = {**self.good_vial_evidence, "vial_protocol_ack": False}
         with self.assertRaisesRegex(self.verifier.VerificationError, "vial_protocol_ack"):
             self._verify(evidence=evidence, profile="vial")
+
+    def test_accepts_dual_profile_with_both_raw_interfaces(self) -> None:
+        result = self._verify(evidence=self.good_dual_evidence, profile="dual")
+
+        self.assertEqual(result["target"], "loudest_micro:vial_oai")
+        self.assertEqual(result["vid_pid"], "303a:8360")
+        self.assertEqual(
+            result["interfaces"],
+            [
+                {"role": "vial", "usage": "ff60:0061", "report_id": None, "report_bytes": 32},
+                {"role": "oai", "usage": "ff00:0061", "report_id": 6, "report_bytes": 64},
+            ],
+        )
+        self.assertEqual(
+            result["usb_descriptor_contract"]["interfaces"],
+            [
+                {"role": "vial", "interface": 1, "endpoint_bytes": 32},
+                {"role": "oai", "interface": 2, "endpoint_bytes": 64},
+            ],
+        )
+        self.assertIn("oai_raw_hid_receive", result["required_symbols"])
+
+    def test_dual_profile_rejects_missing_or_mismatched_interface_evidence(self) -> None:
+        cases = (
+            ("missing vial interface", {"vial_interface": None}, "vial_interface"),
+            ("missing oai interface", {"oai_interface": None}, "oai_interface"),
+            (
+                "swapped report sizes",
+                {"vial_interface": {"usage": "ff60:0061", "report_id": None, "report_bytes": 64}},
+                "report byte",
+            ),
+            (
+                "vial report id",
+                {"vial_interface": {"usage": "ff60:0061", "report_id": 6, "report_bytes": 32}},
+                "report ID",
+            ),
+            (
+                "wrong oai usage",
+                {"oai_interface": {"usage": "ff01:0061", "report_id": 6, "report_bytes": 64}},
+                "usage",
+            ),
+            ("channels not isolated", {"channels_isolated": False}, "channels_isolated"),
+        )
+        for name, changes, message in cases:
+            with self.subTest(name=name):
+                evidence = {**self.good_dual_evidence, **changes}
+                with self.assertRaisesRegex(self.verifier.VerificationError, message):
+                    self._verify(evidence=evidence, profile="dual")
+
+    def test_dual_static_descriptor_contract_rejects_missing_interface_or_endpoint_pair(self) -> None:
+        cases = (
+            ("missing vial interface", {"vial_interface": False}),
+            ("missing oai interface", {"oai_interface": False}),
+            ("missing vial endpoint pair", {"vial_endpoints": False}),
+            ("missing oai endpoint pair", {"oai_endpoints": False}),
+        )
+        for name, options in cases:
+            with self.subTest(name=name):
+                fixture = make_dual_usb_descriptor_fixture(**options)
+                with mock.patch.object(self.verifier, "elf_binary", return_value=fixture):
+                    with self.assertRaisesRegex(self.verifier.VerificationError, "USB descriptor"):
+                        self.verifier.verify_usb_descriptor_contract(
+                            self.good_elf, self.verifier.DUAL_PROFILE
+                        )
+
+    def test_dual_profile_requires_all_dual_symbols(self) -> None:
+        symbols = {
+            "oai_raw_hid_receive": "T",
+            "codex_oai_notify": "T",
+            "codex_led_render": "T",
+        }
+        with self.assertRaisesRegex(self.verifier.VerificationError, "encoder_update_user"):
+            self.verifier.verify_symbols(
+                symbols, required_symbols=self.verifier.DUAL_PROFILE.required_symbols
+            )
 
     def test_rejects_unrelated_elf_even_when_symbols_and_emulator_evidence_pass(self) -> None:
         unrelated_elf = self.root / "unrelated.elf"

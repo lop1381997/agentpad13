@@ -18,12 +18,15 @@ sys.path.insert(0, str(TOOLS))
 import build_codex_oai as builder  # noqa: E402
 from build_codex_oai import (  # noqa: E402
     BuildError,
+    DUAL_OAI_VIAL_ARTIFACT,
+    DUAL_OAI_VIAL_DEFINITION,
     apply_oai_descriptor_patch,
     apply_qmk_patches,
     cleanup_keyboard_link,
     find_cross_compiler,
     keyboard_link,
     publish_oai_uf2,
+    publish_oai_definition,
     run_build,
     validate_qmk_home,
     verify_dual_raw_hid_support,
@@ -225,7 +228,65 @@ class BuildToolSafetyTest(unittest.TestCase):
             builder.VIAL_OAI_ARTIFACT,
             REPO / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2",
         )
+        self.assertEqual(
+            DUAL_OAI_VIAL_ARTIFACT,
+            REPO / "release" / "firmware" / "prebuilt" / "agentpad13_oai_vial_dual.uf2",
+        )
+        self.assertEqual(
+            DUAL_OAI_VIAL_DEFINITION,
+            REPO / "release" / "firmware" / "prebuilt" / "agentpad13_oai_vial_dual.vial",
+        )
         self.assertEqual(builder.KEYMAPS, ("default", "vial", "codex_oai", "vial_oai"))
+
+    def test_publish_combined_definition_atomically(self) -> None:
+        source = self.root / "vial.json"
+        source.write_text('{"name":"dual"}\n', encoding="utf-8")
+        destination = self.root / "prebuilt" / "agentpad13_oai_vial_dual.vial"
+
+        publish_oai_definition(source, destination)
+
+        self.assertEqual(destination.read_text(encoding="utf-8"), '{"name":"dual"}\n')
+        self.assertFalse(any(path.name.startswith(".agentpad13_oai_vial_dual.vial.") for path in destination.parent.iterdir()))
+
+    def test_build_all_publishes_new_combined_pair_without_legacy_vial_oai(self) -> None:
+        keyboard_source = self.root / "keyboard"
+        vial_definition = keyboard_source / "keymaps" / "vial_oai" / "vial.json"
+        vial_definition.parent.mkdir(parents=True)
+        vial_definition.write_text('{"name":"dual"}\n', encoding="utf-8")
+        built = {}
+        for keymap in builder.KEYMAPS:
+            artifact = self.fake_qmk / f"loudest_micro_{keymap}.uf2"
+            artifact.write_bytes(keymap.encode("ascii"))
+            built[keymap] = artifact
+        published: list[tuple[Path, Path]] = []
+
+        def record_publish(source: Path, destination: Path = builder.OAI_ARTIFACT) -> None:
+            published.append((source, destination))
+
+        with mock.patch.object(builder, "KEYBOARD_SOURCE", keyboard_source), mock.patch.object(
+            builder, "validate_qmk_home"
+        ), mock.patch.object(builder, "apply_qmk_patches"), mock.patch.object(
+            builder, "verify_qmk_source_state"
+        ), mock.patch.object(builder, "verify_oai_descriptor_support"), mock.patch.object(
+            builder, "verify_dual_raw_hid_support"
+        ), mock.patch.object(builder, "find_cross_compiler"), mock.patch.object(
+            builder, "keyboard_link", return_value=self.root / "owned-link"
+        ), mock.patch.object(builder, "cleanup_keyboard_link"), mock.patch.object(
+            builder, "run_lint"
+        ), mock.patch.object(builder, "run_build", side_effect=lambda _qmk, keymap, clean: built[keymap]
+        ), mock.patch.object(builder, "publish_oai_uf2", side_effect=record_publish), mock.patch.object(
+            builder, "publish_oai_definition", side_effect=record_publish
+        ):
+            builder.build_all(self.fake_qmk, clean=False)
+
+        self.assertEqual(
+            published,
+            [
+                (built["codex_oai"], builder.OAI_ARTIFACT),
+                (built["vial_oai"], DUAL_OAI_VIAL_ARTIFACT),
+                (vial_definition, DUAL_OAI_VIAL_DEFINITION),
+            ],
+        )
 
     def test_descriptor_patch_is_repository_owned_and_complete(self) -> None:
         patch = REPO / "firmware" / "patches" / "0002-raw-hid-report-id-chibios.patch"

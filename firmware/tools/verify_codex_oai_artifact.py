@@ -17,11 +17,20 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, NamedTuple, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_ROOT = REPO_ROOT / "firmware" / "evidence"
+
+
+class HIDInterfaceProfile(NamedTuple):
+    """One raw HID interface in descriptor and report-descriptor terms."""
+
+    role: str
+    usage: str
+    report_id: int | None
+    report_bytes: int
 
 
 class ArtifactProfile:
@@ -38,6 +47,7 @@ class ArtifactProfile:
         required_symbols: frozenset[str],
         required_evidence: tuple[str, ...] = (),
         default_k00: int | None = None,
+        interfaces: tuple[HIDInterfaceProfile, ...] | None = None,
     ) -> None:
         self.target = target
         self.vid_pid = vid_pid
@@ -47,6 +57,16 @@ class ArtifactProfile:
         self.required_symbols = required_symbols
         self.required_evidence = required_evidence
         self.default_k00 = default_k00
+        self.interfaces = interfaces or (
+            HIDInterfaceProfile(
+                role="oai" if usage == "ff00:0061" else "vial",
+                usage=usage,
+                report_id=report_id,
+                report_bytes=report_bytes,
+            ),
+        )
+        # Explicit alias for callers that describe these as raw interfaces.
+        self.raw_interfaces = self.interfaces
 
 
 DIRECT_PROFILE = ArtifactProfile(
@@ -71,7 +91,23 @@ VIAL_PROFILE = ArtifactProfile(
     required_evidence=("vial_protocol_ack",),
     default_k00=0x7E02,
 )
-PROFILES = {"direct": DIRECT_PROFILE, "vial": VIAL_PROFILE}
+DUAL_PROFILE = ArtifactProfile(
+    target="loudest_micro:vial_oai",
+    vid_pid="303a:8360",
+    usage="ff00:0061",
+    report_id=6,
+    report_bytes=64,
+    required_symbols=frozenset(
+        {"oai_raw_hid_receive", "codex_oai_notify", "codex_led_render", "encoder_update_user"}
+    ),
+    required_evidence=("vial_protocol_ack",),
+    default_k00=None,
+    interfaces=(
+        HIDInterfaceProfile("vial", "ff60:0061", None, 32),
+        HIDInterfaceProfile("oai", "ff00:0061", 6, 64),
+    ),
+)
+PROFILES = {"direct": DIRECT_PROFILE, "vial": VIAL_PROFILE, "dual": DUAL_PROFILE}
 
 # Backward-compatible names for existing direct-OAI consumers and tests.
 TARGET = DIRECT_PROFILE.target
@@ -303,6 +339,184 @@ def verify_symbols(
             )
 
 
+def _descriptor_stream(binary: bytes, offset: int, total_length: int) -> list[bytes]:
+    """Parse one USB descriptor stream without reading past its declared length."""
+    end = offset + total_length
+    if offset < 0 or end > len(binary) or total_length < 9:
+        raise VerificationError("USB descriptor contract has an invalid configuration length")
+    descriptors: list[bytes] = []
+    cursor = offset
+    while cursor < end:
+        if cursor + 2 > end:
+            raise VerificationError("USB descriptor contract has a truncated descriptor header")
+        length = binary[cursor]
+        if length < 2 or cursor + length > end:
+            raise VerificationError("USB descriptor contract has an invalid descriptor length")
+        descriptors.append(binary[cursor : cursor + length])
+        cursor += length
+    if cursor != end or not descriptors or descriptors[0][1] != 2:
+        raise VerificationError("USB descriptor contract does not contain a configuration descriptor")
+    return descriptors
+
+
+def _configuration_descriptors(binary: bytes) -> list[list[bytes]]:
+    """Find valid configuration descriptor streams in an ELF-derived image."""
+    configurations: list[list[bytes]] = []
+    for offset in range(max(0, len(binary) - 8)):
+        if binary[offset] != 9 or binary[offset + 1] != 2:
+            continue
+        total_length = binary[offset + 2] | (binary[offset + 3] << 8)
+        try:
+            configurations.append(_descriptor_stream(binary, offset, total_length))
+        except VerificationError:
+            continue
+    return configurations
+
+
+def _report_items(report: bytes) -> tuple[list[int], list[int], list[int], list[int]]:
+    """Return usage pages, usages, report IDs, and input/output report counts."""
+    usage_pages: list[int] = []
+    usages: list[int] = []
+    report_ids: list[int] = []
+    input_counts: list[int] = []
+    output_counts: list[int] = []
+    report_count: int | None = None
+    cursor = 0
+    while cursor < len(report):
+        prefix = report[cursor]
+        cursor += 1
+        if prefix == 0xFE:
+            if cursor + 2 > len(report):
+                raise ValueError("truncated long HID item")
+            length = report[cursor]
+            cursor += 2
+            if cursor + length > len(report):
+                raise ValueError("truncated long HID item payload")
+            cursor += length
+            continue
+        size_code = prefix & 0x03
+        size = 4 if size_code == 3 else size_code
+        if cursor + size > len(report):
+            raise ValueError("truncated HID item")
+        value = int.from_bytes(report[cursor : cursor + size], "little")
+        cursor += size
+        item_type = (prefix >> 2) & 0x03
+        item_tag = (prefix >> 4) & 0x0F
+        if item_type == 1 and item_tag == 0:
+            usage_pages.append(value)
+        elif item_type == 2 and item_tag == 0:
+            usages.append(value)
+        elif item_type == 1 and item_tag == 8:
+            report_ids.append(value)
+        elif item_type == 1 and item_tag == 9:
+            report_count = value
+        elif item_type == 0 and item_tag == 8 and report_count is not None:
+            input_counts.append(report_count)
+        elif item_type == 0 and item_tag == 9 and report_count is not None:
+            output_counts.append(report_count)
+    return usage_pages, usages, report_ids, input_counts + output_counts
+
+
+def _report_matches(report: bytes, interface: HIDInterfaceProfile) -> bool:
+    try:
+        usage_page_text, usage_id_text = interface.usage.split(":", 1)
+        usage_page = int(usage_page_text, 16)
+        usage_id = int(usage_id_text, 16)
+        pages, usages, report_ids, counts = _report_items(report)
+    except (ValueError, UnicodeError):
+        return False
+    expected_count = interface.report_bytes - (1 if interface.report_id is not None else 0)
+    if expected_count < 1 or pages != [usage_page] or usages.count(usage_id) < 1:
+        return False
+    if interface.report_id is None:
+        if report_ids:
+            return False
+    elif report_ids != [interface.report_id]:
+        return False
+    return counts == [expected_count, expected_count]
+
+
+def _find_report_descriptor(binary: bytes, length: int, interface: HIDInterfaceProfile) -> bytes | None:
+    if length < 1:
+        return None
+    for offset in range(0, len(binary) - length + 1):
+        report = binary[offset : offset + length]
+        if _report_matches(report, interface):
+            return report
+    return None
+
+
+def _interface_records(descriptors: Sequence[bytes]) -> list[tuple[bytes, list[bytes]]]:
+    records: list[tuple[bytes, list[bytes]]] = []
+    for index, descriptor in enumerate(descriptors):
+        if descriptor[1] != 4 or len(descriptor) < 9:
+            continue
+        following = next(
+            (candidate for candidate in descriptors[index + 1 :] if candidate[1] == 4),
+            None,
+        )
+        end = descriptors.index(following, index + 1) if following is not None else len(descriptors)
+        records.append((descriptor, list(descriptors[index + 1 : end])))
+    return records
+
+
+def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[str, Any]:
+    """Verify the complete composite USB/HID contract from the ELF binary image."""
+    binary = elf_binary(elf)
+    configurations = _configuration_descriptors(binary)
+    if not configurations:
+        raise VerificationError("USB descriptor contract has no valid configuration descriptor")
+
+    expected_roles = tuple(interface.role for interface in profile.interfaces)
+    for descriptors in configurations:
+        keyboard = [
+            descriptor
+            for descriptor, following in _interface_records(descriptors)
+            if len(descriptor) >= 9
+            and descriptor[5:9] == bytes((3, 1, 1, 0))
+            and any(item[1] == 0x21 and len(item) >= 9 for item in following)
+        ]
+        if not keyboard:
+            continue
+
+        matched: list[tuple[str, int, int]] = []
+        for interface_descriptor, following in _interface_records(descriptors):
+            if len(interface_descriptor) < 9 or interface_descriptor[5] != 3:
+                continue
+            hid_descriptors = [item for item in following if item[1] == 0x21 and len(item) >= 9]
+            endpoints = [item for item in following if item[1] == 5 and len(item) >= 7]
+            if not hid_descriptors:
+                continue
+            report_length = hid_descriptors[0][7] | (hid_descriptors[0][8] << 8)
+            for expected in profile.interfaces:
+                if not _find_report_descriptor(binary, report_length, expected):
+                    continue
+                if interface_descriptor[4] != 2 or len(endpoints) != 2:
+                    raise VerificationError(
+                        f"USB descriptor contract missing {expected.role} raw interface endpoint pair"
+                    )
+                directions = {bool(endpoint[2] & 0x80) for endpoint in endpoints}
+                sizes = {endpoint[4] | (endpoint[5] << 8) for endpoint in endpoints}
+                if directions != {False, True} or sizes != {expected.report_bytes}:
+                    raise VerificationError(
+                        f"USB descriptor contract has wrong {expected.role} raw interface endpoint pair"
+                    )
+                matched.append((expected.role, interface_descriptor[2], expected.report_bytes))
+                break
+
+        if tuple(role for role, _number, _size in matched) == expected_roles:
+            return {
+                "status": "pass",
+                "configuration_total_length": sum(len(item) for item in descriptors),
+                "keyboard_interface": keyboard[0][2],
+                "interfaces": [
+                    {"role": role, "interface": number, "endpoint_bytes": size}
+                    for role, number, size in matched
+                ],
+            }
+    raise VerificationError("USB descriptor contract is missing the required composite HID interfaces")
+
+
 def verify_evidence(
     evidence: Mapping[str, Any], *, artifact_sha256: str, artifact_size: int,
     profile: ArtifactProfile = DIRECT_PROFILE,
@@ -310,12 +524,29 @@ def verify_evidence(
     """Require the exact enumeration, descriptor, protocol, key and LED proof."""
     if evidence.get("vid_pid") != profile.vid_pid:
         raise VerificationError(f"unexpected VID:PID; expected {profile.vid_pid}")
-    if evidence.get("usage") != profile.usage:
-        raise VerificationError(f"unexpected Raw HID usage; expected {profile.usage}")
-    if evidence.get("report_id") != profile.report_id:
-        raise VerificationError(f"unexpected report ID; expected {profile.report_id}")
-    if evidence.get("report_bytes") != profile.report_bytes:
-        raise VerificationError(f"unexpected report byte count; expected {profile.report_bytes}")
+    if len(profile.interfaces) == 1:
+        interface = profile.interfaces[0]
+        if evidence.get("usage") != interface.usage:
+            raise VerificationError(f"unexpected Raw HID usage; expected {interface.usage}")
+        if evidence.get("report_id") != interface.report_id:
+            raise VerificationError(f"unexpected report ID; expected {interface.report_id}")
+        if evidence.get("report_bytes") != interface.report_bytes:
+            raise VerificationError(f"unexpected report byte count; expected {interface.report_bytes}")
+    else:
+        for interface in profile.interfaces:
+            observed = evidence.get(f"{interface.role}_interface")
+            if not isinstance(observed, Mapping):
+                raise VerificationError(f"emulator evidence did not prove {interface.role}_interface")
+            for field in ("usage", "report_id", "report_bytes"):
+                if observed.get(field) != getattr(interface, field):
+                    label = {
+                        "report_bytes": "report byte count",
+                        "report_id": "report ID",
+                    }.get(field, field.replace("_", " "))
+                    raise VerificationError(
+                        f"unexpected {interface.role} interface {label}; "
+                        f"expected {getattr(interface, field)}"
+                    )
     for field in (
         "usb_enumerated", "keyboard_hid_enumerated", "oai_hid_enumerated",
         "descriptor_verified", *REQUIRED_ACKS, "ws2812_activity", *profile.required_evidence,
@@ -337,6 +568,8 @@ def verify_evidence(
         raise VerificationError(
             f"emulator evidence did not prove default K00 keycode 0x{profile.default_k00:04x}"
         )
+    if len(profile.interfaces) > 1 and evidence.get("channels_isolated") is not True:
+        raise VerificationError("emulator evidence did not prove channels_isolated")
 
 
 def verify(
@@ -352,20 +585,19 @@ def verify(
         evidence, artifact_sha256=digest, artifact_size=size, profile=selected_profile
     )
     equivalence = verify_elf_uf2_equivalence(uf2, elf)
+    usb_contract = verify_usb_descriptor_contract(elf, selected_profile)
     metrics = elf_size(elf)
     verify_symbols(elf_symbols(elf), required_symbols=selected_profile.required_symbols)
-    return {
+    manifest: dict[str, Any] = {
         "status": "pass",
         "target": selected_profile.target,
         "vid_pid": selected_profile.vid_pid,
-        "usage": selected_profile.usage,
-        "report_id": selected_profile.report_id,
-        "report_bytes": selected_profile.report_bytes,
         "sha256": digest,
         "size_bytes": size,
         "elf_sha256": file_sha256(elf, label="ELF"),
         "elf_size": metrics,
         "elf_uf2_equivalence": equivalence,
+        "usb_descriptor_contract": usb_contract,
         "required_symbols": sorted(selected_profile.required_symbols),
         "emulator_evidence": {
             "usb_enumerated": evidence["usb_enumerated"],
@@ -390,6 +622,33 @@ def verify(
             ),
         },
     }
+    if len(selected_profile.interfaces) == 1:
+        manifest.update(
+            {
+                "usage": selected_profile.usage,
+                "report_id": selected_profile.report_id,
+                "report_bytes": selected_profile.report_bytes,
+            }
+        )
+    else:
+        manifest["interfaces"] = [
+            {
+                "role": interface.role,
+                "usage": interface.usage,
+                "report_id": interface.report_id,
+                "report_bytes": interface.report_bytes,
+            }
+            for interface in selected_profile.interfaces
+        ]
+        manifest["emulator_evidence"].update(
+            {
+                "vial_interface": evidence["vial_interface"],
+                "oai_interface": evidence["oai_interface"],
+                "vial_protocol_ack": evidence["vial_protocol_ack"],
+                "channels_isolated": evidence["channels_isolated"],
+            }
+        )
+    return manifest
 
 
 def _safe_manifest_destination(output: Path, evidence_root: Path) -> Path:
