@@ -12,6 +12,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 TARGET = REPO / "firmware" / "loudest_micro" / "keymaps" / "vial_oai"
+ENCODER_SOURCE = TARGET / "encoder_contract.c"
 SHARED_KEYMAP = REPO / "firmware" / "loudest_micro" / "keymaps" / "codex_oai" / "keymap.c"
 OAI_SOURCE = REPO / "firmware" / "loudest_micro" / "keymaps" / "codex_oai" / "codex_oai.c"
 KEYBOARD_SOURCE = REPO / "firmware" / "loudest_micro" / "loudest_micro.c"
@@ -53,6 +54,39 @@ class VialOaiTargetContractTest(unittest.TestCase):
         self.assertEqual(rules["VIA_ENABLE"], "yes")
         self.assertEqual(rules["VIAL_ENABLE"], "yes")
         self.assertEqual(rules["ENCODER_MAP_ENABLE"], "yes")
+
+    def test_shared_endpoints_keep_three_interfaces_and_encoder_contract_compiles(self) -> None:
+        rules = parse_rules(TARGET / "rules.mk")
+        self.assertEqual(rules["KEYBOARD_SHARED_EP"], "yes")
+        self.assertEqual(rules["JOYSTICK_SHARED_EP"], "yes")
+        self.assertTrue(ENCODER_SOURCE.is_file())
+
+        with tempfile.TemporaryDirectory(prefix="agentpad13_encoder_contract_") as directory:
+            directory_path = Path(directory)
+            (directory_path / "qmk_keyboard_stub.h").write_text(
+                "#include <stdbool.h>\n#include <stdint.h>\n", encoding="utf-8"
+            )
+            object_file = directory_path / "encoder_contract.o"
+            build = subprocess.run(
+                [
+                    "cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-c",
+                    "-DQMK_KEYBOARD_H=\"qmk_keyboard_stub.h\"", "-I", str(directory_path),
+                    str(ENCODER_SOURCE), "-o", str(object_file),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(build.returncode, 0, build.stderr)
+            self.assertTrue(object_file.is_file())
+            symbols = subprocess.run(
+                ["nm", "-g", str(object_file)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(symbols.returncode, 0, symbols.stderr)
+            self.assertRegex(symbols.stdout, r"(?m)^\S+ T _?encoder_update_user$")
 
 
 class VialOaiLayoutContractTest(unittest.TestCase):

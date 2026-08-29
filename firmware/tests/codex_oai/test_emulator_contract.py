@@ -57,7 +57,10 @@ def run_dual_oai_vial_emulator(uf2: Path) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="agentpad13_dual_oai_vial_emulator_") as directory:
         evidence_path = Path(directory) / "evidence.json"
         subprocess.run(
-            ["node", "dual_oai_vial_runner.cjs", str(uf2), "--json", str(evidence_path)],
+            [
+                "node", "dual_oai_vial_watchdog.cjs", str(uf2),
+                "--json", str(evidence_path), "--deadline-ms", "30000",
+            ],
             cwd=EMULATOR,
             check=True,
             text=True,
@@ -67,6 +70,21 @@ def run_dual_oai_vial_emulator(uf2: Path) -> dict[str, object]:
 
 
 class OaiEmulatorContractTest(unittest.TestCase):
+    def test_node_timer_cannot_interrupt_a_synchronous_simulation_loop(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is unavailable")
+        result = subprocess.run(
+            [
+                "node", "-e",
+                "const started=Date.now(); setTimeout(() => console.log(Date.now()-started), 1); "
+                "while (Date.now()-started < 50) {}",
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        self.assertGreaterEqual(int(result.stdout.strip()), 45)
+
     def test_dual_smoke_completes_without_emulator_hang(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("pre-hardware emulator gate: node is unavailable")
@@ -79,16 +97,96 @@ class OaiEmulatorContractTest(unittest.TestCase):
             evidence_path = Path(directory) / "evidence.json"
             try:
                 result = subprocess.run(
-                    ["node", "dual_oai_vial_runner.cjs", str(DUAL_OAI_VIAL_UF2), "--json", str(evidence_path)],
+                    ["npm", "run", "smoke:dual-oai-vial"],
                     cwd=EMULATOR,
                     check=False,
                     text=True,
                     capture_output=True,
-                    timeout=15,
+                    timeout=25,
                 )
             except subprocess.TimeoutExpired as exc:
-                self.fail(f"dual emulator hung for 15 seconds: {exc}")
+                self.fail(f"dual emulator hung for 25 seconds: {exc}")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_dual_recovery_never_claims_configuration_descriptor_proof(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("pre-hardware emulator gate: node is unavailable")
+        if not DUAL_OAI_VIAL_UF2.is_file():
+            self.skipTest("dual UF2 is unavailable")
+        evidence = run_dual_oai_vial_emulator(DUAL_OAI_VIAL_UF2)
+        self.assertTrue(evidence["config_descriptor_recovery_used"])
+        self.assertFalse(evidence["configuration_descriptor_verified"])
+        self.assertFalse(evidence["descriptor_verified"])
+        self.assertTrue(evidence["report_descriptors_verified"])
+
+    def test_dual_runner_deadline_is_enforced_as_a_failure(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("pre-hardware emulator gate: node is unavailable")
+        if not DUAL_OAI_VIAL_UF2.is_file():
+            self.skipTest("dual UF2 is unavailable")
+        with tempfile.TemporaryDirectory(prefix="agentpad13_dual_oai_vial_deadline_") as directory:
+            evidence_path = Path(directory) / "evidence.json"
+            result = subprocess.run(
+                [
+                    "node", "dual_oai_vial_runner.cjs", str(DUAL_OAI_VIAL_UF2),
+                    "--json", str(evidence_path), "--deadline-ms", "1",
+                ],
+                cwd=EMULATOR,
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("deadline", (result.stdout + result.stderr).lower())
+            self.assertFalse(evidence_path.exists())
+
+    def test_dual_npm_path_enforces_short_process_deadline(self) -> None:
+        if shutil.which("npm") is None:
+            self.skipTest("pre-hardware emulator gate: npm is unavailable")
+        if not DUAL_OAI_VIAL_UF2.is_file():
+            self.skipTest("dual UF2 is unavailable")
+        package = json.loads((EMULATOR / "package.json").read_text(encoding="utf-8"))
+        self.assertIn("dual_oai_vial_watchdog.cjs", package["scripts"]["smoke:dual-oai-vial"])
+        evidence_path = EMULATOR.parent.parent / "evidence" / "dual-oai-vial-emulator.json"
+        evidence_before = evidence_path.read_bytes()
+        try:
+            result = subprocess.run(
+                ["npm", "run", "smoke:dual-oai-vial", "--", "--deadline-ms", "1"],
+                cwd=EMULATOR,
+                check=False,
+                text=True,
+                capture_output=True,
+                timeout=3,
+            )
+        except subprocess.TimeoutExpired as exc:
+            self.fail(f"npm dual smoke exceeded its 1ms deadline: {exc}")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("watchdog deadline exceeded", (result.stdout + result.stderr).lower())
+        self.assertEqual(evidence_path.read_bytes(), evidence_before)
+
+    def test_dual_runner_runtime_failure_exits_after_simulator_error(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("pre-hardware emulator gate: node is unavailable")
+        if not DUAL_OAI_VIAL_UF2.is_file():
+            self.skipTest("dual UF2 is unavailable")
+        process = subprocess.Popen(
+            [
+                "node", "dual_oai_vial_watchdog.cjs", str(DUAL_OAI_VIAL_UF2),
+                "--json", "/dev/full", "--deadline-ms", "15000",
+            ],
+            cwd=EMULATOR,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = process.communicate(timeout=20)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            self.fail("dual runner stayed alive after a runtime failure")
+        self.assertNotEqual(process.returncode, 0, stdout + stderr)
+        self.assertIn("FAIL", (stdout + stderr).upper())
 
     def test_evidence_requires_oai_descriptor_and_handshake(self) -> None:
         if shutil.which("node") is None:
@@ -146,6 +244,8 @@ class OaiEmulatorContractTest(unittest.TestCase):
             "edgesAfterStatus > edgesBeforeStatus",
         ):
             self.assertIn(fragment, runner)
+        watchdog = (EMULATOR / "dual_oai_vial_watchdog.cjs").read_text(encoding="utf-8")
+        self.assertIn("--deadline-ms", watchdog)
         wrapper = (EMULATOR / "vial_oai_runner.cjs").read_text(encoding="utf-8")
         self.assertIn("AGENTPAD_OAI_VIAL", wrapper)
         self.assertIn("runner.main()", wrapper)
@@ -224,6 +324,7 @@ const vial = runner.hidByReportDescriptor(hidDescriptors, { usagePage: 0xff60, r
 const vialSetup = runner.reportDescriptorSetup(vial.number, vial.reportBytes);
 const oaiSetup = runner.reportDescriptorSetup(oai.number, oai.reportBytes);
 const vialFrame = Buffer.alloc(32); vialFrame[0] = 0x01;
+const vialDynamicKeymapFrame = Buffer.alloc(32); vialDynamicKeymapFrame[0] = 0x05;
 const oaiFrame = Buffer.alloc(64); oaiFrame[0] = 6; oaiFrame[1] = 2;
 const reports = new Map([[oai.number, oai.report]]);
 const sharedOutOai = { ...oai, outEp: vial.outEp };
@@ -237,6 +338,7 @@ if (!oai || !vial || !runner.hasDistinctRawEndpointPairs(vial, oai) ||
     runner.oaiHidEnumerated(oai, reports, [1]) ||
     runner.oaiHidEnumerated({ ...oai, number: 1 }, reports, [1, 2]) ||
     runner.routeFrame(vialFrame, { vial, oai }) !== 'vial' ||
+    runner.routeFrame(vialDynamicKeymapFrame, { vial, oai }) !== 'vial' ||
     runner.routeFrame(oaiFrame, { vial, oai }) !== 'oai') process.exit(1);
 '''
         subprocess.run(["node", "-e", script], cwd=EMULATOR, check=True)
@@ -249,16 +351,16 @@ const runner = require('./dual_oai_vial_runner.cjs');
 const prefix = Buffer.from([
   9, 2, 0x70, 0, 3, 1, 0, 0x80, 50,
   9, 4, 0, 0, 1, 3, 1, 1, 0, 9, 0x21, 0x11, 1, 0, 1, 0x22, 0x44, 0,
-  7, 5, 0x81, 3, 8, 0, 10,
+  7, 5, 0x85, 3, 8, 0, 10,
   9, 4, 1, 0, 2, 3, 0, 0, 0, 9, 0x21, 0x11, 1, 0, 1, 0x22, 0x20, 0,
-  7, 5, 0x82, 3, 32, 0, 1,
+  7, 5, 0x81, 3, 32, 0, 1,
 ]);
 const invalidHeader = Buffer.from(prefix); invalidHeader[4] = 2;
 const invalidVial = Buffer.from(prefix); invalidVial[57] = 64;
 const interfaces = runner.parseConfig(prefix);
 const recovery = runner.recoverTruncatedConfig(interfaces, { complete: false, prefixValidated: true });
 const parsed = [
-  { number: 0, cls: 3, sub: 1, proto: 1, inEp: 1, outEp: -1, inBytes: 8, outBytes: 0, reportBytes: 68 },
+  { number: 0, cls: 3, sub: 1, proto: 1, inEp: 5, outEp: -1, inBytes: 8, outBytes: 0, reportBytes: 68 },
   { number: 1, cls: 3, sub: 0, proto: 0, inEp: 2, outEp: 3, inBytes: 32, outBytes: 32, reportBytes: 32 },
   { number: 2, cls: 3, sub: 0, proto: 0, inEp: 9, outEp: 10, inBytes: 64, outBytes: 64, reportBytes: 38 },
 ];
@@ -299,6 +401,20 @@ if (!runner.hasValidatedDualConfigPrefix(prefix) || runner.hasValidatedDualConfi
         self.assertTrue(evidence["device_status_ack"])
         self.assertEqual(evidence["key_event"], {"k": "AG00", "act": 1})
         self.assertTrue(evidence["channels_isolated"])
+        keyboard_behavior = evidence["keyboard_report_behavior"]
+        self.assertEqual(keyboard_behavior["report_bytes"], 8)
+        self.assertGreater(keyboard_behavior["report_count"], 0)
+        self.assertGreater(keyboard_behavior["reports_after_key"], 0)
+        self.assertTrue(keyboard_behavior["press_seen"])
+        self.assertTrue(keyboard_behavior["release_seen"])
+        joystick_behavior = evidence["joystick_report_behavior"]
+        self.assertEqual(joystick_behavior["report_id"], 7)
+        self.assertGreaterEqual(joystick_behavior["report_count"], 2)
+        self.assertTrue(joystick_behavior["axes_swung"])
+        self.assertEqual(
+            evidence["shared_keyboard_joystick_endpoint"]["keyboard_endpoint"],
+            evidence["shared_keyboard_joystick_endpoint"]["joystick_endpoint"],
+        )
         self.assertNotEqual(
             evidence["vial_endpoint"]["in_endpoint"], evidence["oai_endpoint"]["in_endpoint"]
         )
@@ -314,6 +430,8 @@ if (!runner.hasValidatedDualConfigPrefix(prefix) || runner.hasValidatedDualConfi
                     "interface_number": 2,
                     "in_endpoint": 3,
                     "out_endpoint": 4,
+                    "in_endpoint_address": 0x83,
+                    "out_endpoint_address": 0x04,
                     "not_descriptor_proof": True,
                 },
             )

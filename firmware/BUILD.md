@@ -162,8 +162,12 @@ Its paired Vial definition is
 OAI identity and wire contract (`303A:8360`, `FF00:61`, Report ID 6, 64-byte
 reports) while exposing Vial on a separate `FF60:61`, report-ID-less, 32-byte
 interface. The exact three-interface descriptor, ELF/UF2 equivalence, both
-protocol paths, endpoint isolation and LED/event behavior pass in the recorded
-offline evidence. Physical validation is pending; use
+protocol paths, unique endpoint addresses (`0x85`, `0x81`/`0x02`,
+`0x83`/`0x04`), shared keyboard/joystick reports, encoder compatibility and
+LED/event behavior pass in the recorded offline evidence. The emulator’s
+truncated configuration recovery is explicitly synthetic and never counts as
+configuration-descriptor proof; the ELF-derived static verifier is authoritative.
+Physical validation is pending; use
 `docs/dual-oai-vial-physical-runbook.md` for the gated manual procedure.
 
 ### AgentPad13 Vial OAI (historical Phase 3 firmware foundation)

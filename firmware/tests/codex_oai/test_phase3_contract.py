@@ -29,6 +29,7 @@ UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_codex_oai.uf2"
 VIAL_UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_vial_oai.uf2"
 DUAL_UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_oai_vial_dual.uf2"
 DUAL_VIAL = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_oai_vial_dual.vial"
+RECOVERY_UF2 = REPO / "release" / "firmware" / "prebuilt" / "agentpad13_reference.uf2"
 
 BOOTROM_COMMIT = "7701ee065f50a04380f81361befd754810cb9e28"
 BOOTROM_SHA256 = "99f8a1f813ce3aa9415884de3fb6c5b962d3c6fa0394b05413ad3c7b3c39ec62"
@@ -60,8 +61,8 @@ class Phase3ReleaseContractTest(unittest.TestCase):
         )
         self.assertEqual(
             package["scripts"].get("smoke:dual-oai-vial"),
-            "node dual_oai_vial_runner.cjs ../../../release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2 "
-            "--json ../../evidence/dual-oai-vial-emulator.json",
+            "node dual_oai_vial_watchdog.cjs ../../../release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2 "
+            "--json ../../evidence/dual-oai-vial-emulator.json --deadline-ms 20000",
         )
 
     def test_default_and_vial_smokes_preserve_protocol_v1_release_contract(self) -> None:
@@ -116,9 +117,22 @@ class Phase3ReleaseContractTest(unittest.TestCase):
         self.assertTrue(evidence["oai_hid_enumerated"])
         self.assertTrue(evidence["vial_protocol_ack"])
         self.assertTrue(evidence["channels_isolated"])
+        self.assertEqual(evidence["device_identity"], {"manufacturer": "hirlu", "product": "Codex Micro Lab OAI LED"})
+        self.assertEqual(evidence["shared_keyboard_joystick_endpoint"], {"keyboard_endpoint": 5, "joystick_endpoint": 5})
+        self.assertTrue(evidence["keyboard_report_behavior"]["press_seen"])
+        self.assertTrue(evidence["keyboard_report_behavior"]["release_seen"])
+        self.assertTrue(evidence["joystick_report_behavior"]["axes_swung"])
+        self.assertTrue(evidence["report_descriptors_verified"])
+        self.assertFalse(evidence["configuration_descriptor_verified"])
+        self.assertFalse(evidence["descriptor_verified"])
         self.assertEqual(manifest["target"], "loudest_micro:vial_oai")
         self.assertEqual(manifest["sha256"], digest)
         self.assertEqual(manifest["emulator_evidence"]["uf2_sha256"], digest)
+        self.assertEqual(manifest["device_identity"], {"manufacturer": "hirlu", "product": "Codex Micro Lab OAI LED"})
+        self.assertEqual(manifest["usb_descriptor_contract"]["endpoint_addresses"], [2, 4, 129, 131, 133])
+        self.assertTrue(manifest["emulator_evidence"]["report_descriptors_verified"])
+        self.assertFalse(manifest["emulator_evidence"]["configuration_descriptor_verified"])
+        self.assertFalse(manifest["emulator_evidence"]["descriptor_verified"])
 
     def test_dual_candidate_definition_and_runbook_are_ready_for_manual_test(self) -> None:
         self.assertTrue(DUAL_UF2.is_file(), f"missing dual release artifact: {DUAL_UF2}")
@@ -133,8 +147,13 @@ class Phase3ReleaseContractTest(unittest.TestCase):
             "Codex Desktop detection",
             "event/LED",
             "recovery UF2",
+            "1c8b9d5a716f24373477fd2368df1e41a122242d406c2adb332f4e12cd24a212",
+            "Recovery requires a separate authorization",
+            "independent of any candidate authorization",
         ):
             self.assertIn(fragment, runbook)
+        self.assertEqual(RECOVERY_UF2.stat().st_size, 93696)
+        self.assertIn(hashlib.sha256(RECOVERY_UF2.read_bytes()).hexdigest(), runbook)
 
     def test_older_vial_oai_capture_is_named_historical_not_current(self) -> None:
         self.assertTrue(VIAL_EVIDENCE.is_file(), f"missing historical evidence: {VIAL_EVIDENCE}")

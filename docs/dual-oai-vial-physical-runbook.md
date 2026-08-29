@@ -12,10 +12,17 @@ authorize a flash or reset.
 - SHA-256: `ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c`
 - Vial definition: `release/firmware/prebuilt/agentpad13_oai_vial_dual.vial`
 - recovery UF2: `release/firmware/prebuilt/agentpad13_reference.uf2`
+- Recovery size: **93696 bytes**
+- Recovery SHA-256: `1c8b9d5a716f24373477fd2368df1e41a122242d406c2adb332f4e12cd24a212`
 
 Before each physical flash, obtain and retain this literal authorization:
 
 > I authorize one BOOTSEL flash of `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2` on board `<board id>`, after verifying SHA-256 `ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c` and size 123904 bytes. I understand this is a local, physically unvalidated candidate and authorize no other device operation.
+
+Recovery requires a separate authorization, obtained only if the candidate
+fails to enumerate or is otherwise unsafe to continue testing:
+
+> I separately authorize one BOOTSEL recovery flash of `release/firmware/prebuilt/agentpad13_reference.uf2` on board `<board id>`, after verifying SHA-256 `1c8b9d5a716f24373477fd2368df1e41a122242d406c2adb332f4e12cd24a212` and size 93696 bytes. This authorization is independent of any candidate authorization, permits no candidate reflash, and authorizes no other device operation.
 
 ## Flash and recovery
 
@@ -35,6 +42,12 @@ raw HID. The two raw interfaces are:
 
 - Vial: usage `FF60:61`, no report ID, 32-byte input/output reports.
 - OAI: usage `FF00:61`, Report ID `6`, 64-byte input/output reports.
+
+The compiled-artifact static proof records the unique endpoint addresses:
+keyboard IN `0x85` (shared with joystick reports), Vial IN/OUT `0x81`/`0x02`,
+and OAI IN/OUT `0x83`/`0x04`. The emulator’s truncated-configuration recovery
+metadata is transport scaffolding only; it is not configuration-descriptor
+proof. That proof comes from the ELF-derived static verifier.
 
 The OAI interface must remain byte-compatible with Codex Desktop. This target
 does not use, reserve or reactivate the obsolete `0xA6` framing.

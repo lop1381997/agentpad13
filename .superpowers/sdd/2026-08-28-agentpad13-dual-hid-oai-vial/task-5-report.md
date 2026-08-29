@@ -48,41 +48,65 @@ paired definition is 2,318 bytes with SHA-256
 
 ## Debugging evidence and fix
 
-The interrupted `npm run smoke:dual-oai-vial` process was terminated at PIDs
-62146/62247. A bounded reproduction sampled the Node process while it was in
-the rp2040js instruction loop (`Date.now`/V8 interpreter), with no native I/O
-wait; the sample is `/tmp/node_2026-08-28_225806_Rmp8.sample.txt`. Static ELF
-inspection showed the current shared-keyboard descriptor allocates Vial
-endpoints `1 -> 2` and OAI endpoints `3 -> 4`, while the recent runner/test
-recovery path still assumed `4 -> 5`. The root-cause hypothesis was that the
-stale synthetic endpoint pair prevented OAI frames from reaching their owner
-and left the emulator in its unbounded instruction-loop behavior.
+The interrupted `npm run smoke:dual-oai-vial` process was terminated after it
+stayed alive beyond four minutes. A bounded reproduction showed two distinct
+failure paths: the shared keyboard endpoint is `0x85` (not the old assumed
+address), and a Vial dynamic-keymap `0x05` frame was rejected by the route
+guard. The runner then set `process.exitCode` while rp2040js retained active
+handles, so Node did not exit. The corrected runner routes `0x05` and exits
+nonzero on failure.
 
-Before the correction, the recovery regression failed with the stale `4/5`
-expectation. The added
-`test_dual_smoke_completes_without_emulator_hang` provides a 15-second test
-bound; after the correction the direct Node smoke completed in 8.0 seconds and
-the timed `npm run smoke:dual-oai-vial` completed in 8.06 seconds. The final
-dual evidence records `channels_isolated: true`.
+The user-supplied deadline diagnosis was also reproduced directly: a synchronous
+50 ms JavaScript loop delayed a 1 ms `setTimeout` until the loop returned. Thus
+the runner’s in-process timer/check cannot interrupt a non-returning
+rp2040js `execute`/`tick` path. The normal npm script now invokes the independent
+`dual_oai_vial_watchdog.cjs` parent, which kills the child process at the
+process-wide deadline, removes the child temporary evidence and exits nonzero.
+The exact regression is `npm run smoke:dual-oai-vial -- --deadline-ms 1`; it
+completes within three seconds, reports `watchdog deadline exceeded`, and leaves
+the checked-in evidence byte-identical.
+
+Static ELF inspection confirms the shared-keyboard descriptor allocates Vial
+endpoints `1 -> 2` and OAI endpoints `3 -> 4`; the final compiled endpoint set
+is keyboard IN `0x85`, Vial IN/OUT `0x81`/`0x02`, and OAI IN/OUT `0x83`/`0x04`.
+The emulator’s truncated-configuration recovery records those values as
+synthetic transport metadata only and sets both
+`configuration_descriptor_verified` and `descriptor_verified` false. The
+ELF-derived verifier is the sole configuration-descriptor proof. The final
+dual evidence records `channels_isolated: true`, keyboard press/release,
+joystick axis movement on the shared endpoint, and the compiled encoder shim.
 
 ## Validation
 
 - Pre-build release contract: expected red result (missing dual package).
 - Build: four targets PASS; zero flash operations.
-- Dual emulator: PASS; exact Vial `FF60:61` / 32-byte and OAI `FF00:61` /
-  Report ID 6 / 64-byte descriptors, OAI RPC/status/event/LED checks, Vial
-  protocol checks and endpoint isolation all pass.
-- Static verifier: PASS, including ELF/UF2 equivalence and exact three-HID
-  interface contract; command used the tool's actual
+- Dual emulator: PASS; Vial `FF60:61` / 32-byte and OAI `FF00:61` / Report ID 6
+  / 64-byte report contracts, OAI RPC/status/event/LED checks, Vial protocol
+  checks, shared keyboard/joystick behavior and endpoint isolation all pass.
+- Static verifier: PASS, including ELF/UF2 equivalence, exact unique endpoint
+  addresses, compiled `hirlu` / `Codex Micro Lab OAI LED` identity and exact
+  three-HID interface contract; command used the tool's actual
   `--emulator-evidence` option.
 - `python3 -m unittest discover -s firmware/tests/codex_oai -p 'test_*.py' -v`:
-  144 tests passed, 0 skipped.
+  153 tests passed, 0 skipped.
+- Exact npm deadline regression: `npm run smoke:dual-oai-vial --
+  --deadline-ms 1` returned nonzero within three seconds, reported the
+  independent watchdog deadline and left the existing evidence unchanged.
 - `python3 -B manifest_selfverify.py`: 9/9 checks passed; 156 files and
   56,488,941 bytes agree with the release manifest.
 - Final emulator matrix: `smoke:default`, `smoke:vial`,
   `smoke:codex-oai`, and `smoke:dual-oai-vial` all PASS.
-- `node --check firmware/tests/emulator/dual_oai_vial_runner.cjs`: PASS.
+- `node --check firmware/tests/emulator/dual_oai_vial_runner.cjs` and
+  `dual_oai_vial_watchdog.cjs`: PASS.
 - `git diff --check`: PASS.
+
+## Review-round-1 remediation
+
+The recovery image named by the runbook is independently verifiable before use:
+`release/firmware/prebuilt/agentpad13_reference.uf2`, 93696 bytes,
+SHA-256 `1c8b9d5a716f24373477fd2368df1e41a122242d406c2adb332f4e12cd24a212`.
+The runbook contains a separate literal recovery authorization; candidate
+authorization does not authorize recovery.
 
 ## Limitations
 

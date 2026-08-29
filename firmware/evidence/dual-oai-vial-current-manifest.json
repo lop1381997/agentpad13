@@ -1,4 +1,8 @@
 {
+  "device_identity": {
+    "manufacturer": "hirlu",
+    "product": "Codex Micro Lab OAI LED"
+  },
   "elf_sha256": "b436e653c1ce988d7a39bbf8c1dca278ced511d4613f5a1106c7542d060f25d2",
   "elf_size": {
     "bss": 265120,
@@ -14,20 +18,51 @@
   },
   "emulator_evidence": {
     "channels_isolated": true,
-    "descriptor_verified": true,
+    "config_descriptor_recovery_used": true,
+    "configuration_descriptor_verified": false,
+    "descriptor_verified": false,
+    "device_identity": {
+      "manufacturer": "hirlu",
+      "product": "Codex Micro Lab OAI LED"
+    },
     "device_status_ack": true,
+    "joystick_report_behavior": {
+      "axes_a": [
+        -486,
+        488
+      ],
+      "axes_b": [
+        488,
+        -486
+      ],
+      "axes_swung": true,
+      "report_count": 3,
+      "report_id": 7
+    },
     "key_event": {
       "act": 1,
       "k": "AG00"
     },
     "keyboard_hid_enumerated": true,
+    "keyboard_report_behavior": {
+      "press_seen": true,
+      "release_seen": true,
+      "report_bytes": 8,
+      "report_count": 2,
+      "reports_after_key": 2
+    },
     "oai_hid_enumerated": true,
     "oai_interface": {
       "report_bytes": 64,
       "report_id": 6,
       "usage": "ff00:0061"
     },
+    "report_descriptors_verified": true,
     "rgbcfg_ack": true,
+    "shared_keyboard_joystick_endpoint": {
+      "joystick_endpoint": 5,
+      "keyboard_endpoint": 5
+    },
     "task_status_fragment_count": 2,
     "thstatus_ack": true,
     "uf2_sha256": "ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c",
@@ -67,6 +102,13 @@
   "target": "loudest_micro:vial_oai",
   "usb_descriptor_contract": {
     "configuration_total_length": 98,
+    "endpoint_addresses": [
+      2,
+      4,
+      129,
+      131,
+      133
+    ],
     "interfaces": [
       {
         "endpoint_bytes": 32,

@@ -9,7 +9,13 @@ The current port rebuild is 93,696 bytes with SHA-256
 `dual-oai-vial-emulator.json` is the current Task-5 capture for
 `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`. It proves the
 three-interface descriptor, the exact Vial `FF60:61` and OAI `FF00:61`
-contracts, both protocol paths, OAI event/LED behavior and response isolation.
+contracts, exact compiled endpoint address set (`0x85`, `0x81`/`0x02`,
+`0x83`/`0x04`), shared keyboard/joystick press/release and axis behavior,
+encoder compatibility, both protocol paths, OAI event/LED behavior and
+response isolation. Its `config_descriptor_recovery_used` and synthetic
+endpoint fields describe rp2040js transport recovery only; they are never
+configuration-descriptor proof. That proof is recorded by the ELF-derived
+static verifier in `dual-oai-vial-current-manifest.json`.
 The current dual rebuild is 123,904 bytes with SHA-256
 `ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c`.
 Its verifier manifest is `dual-oai-vial-current-manifest.json`.

@@ -32,6 +32,8 @@ class HIDInterfaceProfile(NamedTuple):
     report_id: int | None
     report_bytes: int
     interface_number: int = 1
+    in_endpoint_address: int | None = None
+    out_endpoint_address: int | None = None
 
 
 class HIDVendorApplicationCollection(NamedTuple):
@@ -56,6 +58,9 @@ class ArtifactProfile:
         required_evidence: tuple[str, ...] = (),
         default_k00: int | None = None,
         interfaces: tuple[HIDInterfaceProfile, ...] | None = None,
+        keyboard_in_endpoint_address: int | None = None,
+        manufacturer: str | None = None,
+        product: str | None = None,
     ) -> None:
         self.target = target
         self.vid_pid = vid_pid
@@ -65,6 +70,9 @@ class ArtifactProfile:
         self.required_symbols = required_symbols
         self.required_evidence = required_evidence
         self.default_k00 = default_k00
+        self.keyboard_in_endpoint_address = keyboard_in_endpoint_address
+        self.manufacturer = manufacturer
+        self.product = product
         self.interfaces = interfaces or (
             HIDInterfaceProfile(
                 role="oai" if usage == "ff00:0061" else "vial",
@@ -112,9 +120,12 @@ DUAL_PROFILE = ArtifactProfile(
     required_evidence=("vial_protocol_ack",),
     default_k00=None,
     interfaces=(
-        HIDInterfaceProfile("vial", "ff60:0061", None, 32, 1),
-        HIDInterfaceProfile("oai", "ff00:0061", 6, 64, 2),
+        HIDInterfaceProfile("vial", "ff60:0061", None, 32, 1, 0x81, 0x02),
+        HIDInterfaceProfile("oai", "ff00:0061", 6, 64, 2, 0x83, 0x04),
     ),
+    keyboard_in_endpoint_address=0x85,
+    manufacturer="hirlu",
+    product="Codex Micro Lab OAI LED",
 )
 PROFILES = {"direct": DIRECT_PROFILE, "vial": VIAL_PROFILE, "dual": DUAL_PROFILE}
 
@@ -638,6 +649,20 @@ def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[
         except VerificationError:
             continue
 
+        endpoint_addresses: set[int] = set()
+        keyboard_endpoints = [item for item in keyboard_following if item[1] == 5 and len(item) >= 7]
+        if len(profile.interfaces) > 1:
+            if keyboard[4] != 1 or len(keyboard_endpoints) != 1:
+                continue
+            keyboard_endpoint = keyboard_endpoints[0]
+            if not (keyboard_endpoint[2] & 0x80) or (keyboard_endpoint[2] == 0):
+                continue
+            if profile.keyboard_in_endpoint_address is not None and (
+                keyboard_endpoint[2] != profile.keyboard_in_endpoint_address
+            ):
+                continue
+            endpoint_addresses.add(keyboard_endpoint[2])
+
         raw_records = records[1:]
         if len(raw_records) != len(profile.interfaces):
             continue
@@ -683,6 +708,24 @@ def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[
                     raise VerificationError(
                         f"USB descriptor contract has wrong {expected.role} raw interface endpoint pair"
                     )
+                addresses = {endpoint[2] for endpoint in endpoints}
+                if len(addresses) != len(endpoints):
+                    raise VerificationError(
+                        f"USB descriptor contract has duplicate {expected.role} endpoint addresses"
+                    )
+                expected_addresses = {
+                    expected.in_endpoint_address,
+                    expected.out_endpoint_address,
+                }
+                if None not in expected_addresses and addresses != expected_addresses:
+                    raise VerificationError(
+                        f"USB descriptor contract has wrong {expected.role} endpoint addresses"
+                    )
+                if endpoint_addresses.intersection(addresses):
+                    raise VerificationError(
+                        f"USB descriptor contract has globally colliding {expected.role} endpoint addresses"
+                    )
+                endpoint_addresses.update(addresses)
                 matched.append((expected.role, interface_descriptor[2], expected.report_bytes))
         except VerificationError:
             continue
@@ -698,8 +741,83 @@ def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[
                     {"role": role, "interface": number, "endpoint_bytes": size}
                     for role, number, size in matched
                 ],
+                "endpoint_addresses": sorted(endpoint_addresses),
             }
     raise VerificationError("USB descriptor contract is missing the required composite HID interfaces")
+
+
+def verify_device_identity(binary: bytes, profile: ArtifactProfile) -> dict[str, str]:
+    """Require the expected compiled USB identity and its device-descriptor indices.
+
+    A naked UTF-16 substring is not sufficient: it could be an unrelated log
+    string or a stale descriptor.  The compiled image must contain one device
+    descriptor for the profile VID/PID, with the locked manufacturer/product
+    indices, and exactly one matching descriptor for each selected string.
+    """
+    if profile.manufacturer is None and profile.product is None:
+        return {}
+
+    try:
+        expected_vid, expected_pid = (int(part, 16) for part in profile.vid_pid.split(":", 1))
+    except ValueError as exc:
+        raise VerificationError(f"invalid profile VID:PID: {profile.vid_pid}") from exc
+
+    device_descriptors = []
+    for offset in range(max(0, len(binary) - 17)):
+        descriptor = binary[offset : offset + 18]
+        if len(descriptor) != 18 or descriptor[:2] != bytes((18, 1)):
+            continue
+        vid = descriptor[8] | (descriptor[9] << 8)
+        pid = descriptor[10] | (descriptor[11] << 8)
+        if vid == expected_vid and pid == expected_pid:
+            device_descriptors.append((offset, descriptor))
+    if len(device_descriptors) != 1:
+        raise VerificationError(
+            f"compiled USB device descriptor must contain one {profile.vid_pid} identity; "
+            f"found {len(device_descriptors)}"
+        )
+    _device_offset, device = device_descriptors[0]
+    manufacturer_index = device[14]
+    product_index = device[15]
+    if profile.manufacturer is not None and manufacturer_index != 1:
+        raise VerificationError(
+            f"compiled USB manufacturer string index must be 1; found {manufacturer_index}"
+        )
+    if profile.product is not None and product_index != 2:
+        raise VerificationError(
+            f"compiled USB product string index must be 2; found {product_index}"
+        )
+
+    string_values: dict[str, int] = {}
+    for offset in range(max(0, len(binary) - 1)):
+        length = binary[offset]
+        if length < 2 or length % 2 or offset + length > len(binary):
+            continue
+        if binary[offset + 1] != 3:
+            continue
+        payload = binary[offset + 2 : offset + length]
+        try:
+            value = payload.decode("utf-16le")
+        except UnicodeDecodeError:
+            continue
+        if value:
+            string_values[value] = string_values.get(value, 0) + 1
+
+    expected = {
+        "manufacturer": profile.manufacturer,
+        "product": profile.product,
+    }
+    identity: dict[str, str] = {}
+    for field, value in expected.items():
+        if value is None:
+            continue
+        if string_values.get(value) != 1:
+            raise VerificationError(
+                f"compiled USB {field} string must have one exact descriptor {value!r}; "
+                f"found {string_values.get(value, 0)}"
+            )
+        identity[field] = value
+    return identity
 
 
 def verify_evidence(
@@ -732,12 +850,39 @@ def verify_evidence(
                         f"unexpected {interface.role} interface {label}; "
                         f"expected {getattr(interface, field)}"
                     )
-    for field in (
+    required_fields = [
         "usb_enumerated", "keyboard_hid_enumerated", "oai_hid_enumerated",
-        "descriptor_verified", *REQUIRED_ACKS, "ws2812_activity", *profile.required_evidence,
-    ):
+        *REQUIRED_ACKS, "ws2812_activity", *profile.required_evidence,
+    ]
+    if len(profile.interfaces) > 1:
+        required_fields.append("report_descriptors_verified")
+    else:
+        required_fields.append("descriptor_verified")
+    for field in required_fields:
         if evidence.get(field) is not True:
             raise VerificationError(f"emulator evidence did not prove {field}")
+    if len(profile.interfaces) > 1:
+        recovery_used = evidence.get("config_descriptor_recovery_used") is True
+        expected_identity = {
+            field: value
+            for field, value in (
+                ("manufacturer", profile.manufacturer), ("product", profile.product)
+            )
+            if value is not None
+        }
+        if evidence.get("device_identity") != expected_identity:
+            raise VerificationError("emulator evidence has an unexpected compiled device identity")
+        if recovery_used:
+            if evidence.get("configuration_descriptor_verified") is not False:
+                raise VerificationError(
+                    "recovery evidence cannot claim configuration_descriptor_verified"
+                )
+            if evidence.get("descriptor_verified") is not False:
+                raise VerificationError("recovery evidence cannot claim descriptor_verified")
+        else:
+            for field in ("configuration_descriptor_verified", "descriptor_verified"):
+                if evidence.get(field) is not True:
+                    raise VerificationError(f"emulator evidence did not prove {field}")
     if evidence.get("uf2_sha256") != artifact_sha256:
         raise VerificationError("emulator evidence SHA-256 does not match the UF2")
     if evidence.get("uf2_size_bytes") != artifact_size:
@@ -771,6 +916,7 @@ def verify(
     )
     equivalence = verify_elf_uf2_equivalence(uf2, elf)
     usb_contract = verify_usb_descriptor_contract(elf, selected_profile)
+    device_identity = verify_device_identity(elf_binary(elf), selected_profile)
     metrics = elf_size(elf)
     verify_symbols(elf_symbols(elf), required_symbols=selected_profile.required_symbols)
     manifest: dict[str, Any] = {
@@ -783,10 +929,14 @@ def verify(
         "elf_size": metrics,
         "elf_uf2_equivalence": equivalence,
         "usb_descriptor_contract": usb_contract,
+        "device_identity": device_identity,
         "required_symbols": sorted(selected_profile.required_symbols),
         "emulator_evidence": {
             "usb_enumerated": evidence["usb_enumerated"],
             "descriptor_verified": evidence["descriptor_verified"],
+            "report_descriptors_verified": evidence.get("report_descriptors_verified"),
+            "configuration_descriptor_verified": evidence.get("configuration_descriptor_verified"),
+            "config_descriptor_recovery_used": evidence.get("config_descriptor_recovery_used"),
             "keyboard_hid_enumerated": evidence["keyboard_hid_enumerated"],
             "oai_hid_enumerated": evidence["oai_hid_enumerated"],
             "uf2_sha256": evidence["uf2_sha256"],
@@ -831,6 +981,12 @@ def verify(
                 "oai_interface": evidence["oai_interface"],
                 "vial_protocol_ack": evidence["vial_protocol_ack"],
                 "channels_isolated": evidence["channels_isolated"],
+                "device_identity": evidence.get("device_identity"),
+                "keyboard_report_behavior": evidence.get("keyboard_report_behavior"),
+                "joystick_report_behavior": evidence.get("joystick_report_behavior"),
+                "shared_keyboard_joystick_endpoint": evidence.get(
+                    "shared_keyboard_joystick_endpoint"
+                ),
             }
         )
     return manifest

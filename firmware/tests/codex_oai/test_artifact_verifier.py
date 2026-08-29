@@ -21,6 +21,22 @@ UF2_PAYLOAD_SIZE = 256
 UF2_FLASH_BASE = 0x10000000
 
 
+def make_usb_string_descriptor(value: str) -> bytes:
+    payload = value.encode("utf-16le")
+    return bytes((len(payload) + 2, 3)) + payload
+
+
+def make_usb_device_descriptor(
+    *, vid: int = 0x303A, pid: int = 0x8360, manufacturer_index: int = 1,
+    product_index: int = 2, serial_index: int = 3,
+) -> bytes:
+    return bytes((
+        18, 1, 0, 2, 0, 0, 0, 64,
+        vid & 0xFF, vid >> 8, pid & 0xFF, pid >> 8,
+        0, 5, manufacturer_index, product_index, serial_index, 1,
+    ))
+
+
 def make_dual_usb_descriptor_fixture(
     *,
     vial_interface: bool = True,
@@ -44,6 +60,11 @@ def make_dual_usb_descriptor_fixture(
     declared_interfaces: int | None = None,
     extra_interface: bool = False,
     malformed_interface: bool = False,
+    keyboard_in_endpoint: int = 0x85,
+    vial_out_endpoint: int = 0x02,
+    vial_in_endpoint: int = 0x81,
+    oai_out_endpoint: int = 0x04,
+    oai_in_endpoint: int = 0x83,
 ) -> bytes:
     """Return a compact ELF-derived image with the complete dual HID contract."""
     if oai_interface_number is None:
@@ -68,19 +89,19 @@ def make_dual_usb_descriptor_fixture(
     keyboard = (
         bytes((9, 4, 0, 0, 1, 3, 1, 1, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, 0x22, 0, 0)),
-        bytes((7, 5, 0x81, 3, 8, 0, 10)),
+        bytes((7, 5, keyboard_in_endpoint, 3, 8, 0, 10)),
     )
     vial = (
         bytes((9, 4, vial_interface_number, vial_alternate_setting, 2, 3, 0, 0, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, vial_hid_report_type, len(vial_report), 0)),
-        bytes((7, 5, 2, 3, 32, 0, 1)),
-        bytes((7, 5, 0x82, 3, 32, 0, 1)),
+        bytes((7, 5, vial_out_endpoint, 3, 32, 0, 1)),
+        bytes((7, 5, vial_in_endpoint, 3, 32, 0, 1)),
     )
     oai = (
         bytes((9, 4, oai_interface_number, oai_alternate_setting, 2, 3, 0, 0, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, oai_hid_report_type, len(oai_report), 0)),
-        bytes((7, 5, 3, 3, 64, 0, 1)),
-        bytes((7, 5, 0x83, 3, 64, 0, 1)),
+        bytes((7, 5, oai_out_endpoint, 3, 64, 0, 1)),
+        bytes((7, 5, oai_in_endpoint, 3, 64, 0, 1)),
     )
     descriptors = list(keyboard)
     raw_descriptors = []
@@ -172,7 +193,10 @@ class ArtifactVerifierTest(unittest.TestCase):
         )
         self.dual_elf_binary = (
             bytes(range(256))
+            + make_usb_device_descriptor()
             + make_dual_usb_descriptor_fixture()
+            + make_usb_string_descriptor("hirlu")
+            + make_usb_string_descriptor("Codex Micro Lab OAI LED")
             + b"agentpad13 dual oai fixture\n"
         )
         self.uf2_image = self.elf_binary + bytes(
@@ -244,6 +268,25 @@ class ArtifactVerifierTest(unittest.TestCase):
             },
             "vial_protocol_ack": True,
             "channels_isolated": True,
+            "report_descriptors_verified": True,
+            "configuration_descriptor_verified": False,
+            "config_descriptor_recovery_used": True,
+            "descriptor_verified": False,
+            "device_identity": {
+                "manufacturer": "hirlu", "product": "Codex Micro Lab OAI LED",
+            },
+            "keyboard_report_behavior": {
+                "report_bytes": 8, "report_count": 2,
+                "press_seen": True, "release_seen": True,
+            },
+            "joystick_report_behavior": {
+                "report_id": 7, "report_count": 2, "axes_swung": True,
+            },
+            "shared_keyboard_joystick_endpoint": {
+                "keyboard_endpoint": 5, "joystick_endpoint": 5,
+            },
+            "manufacturer": "hirlu",
+            "product": "Codex Micro Lab OAI LED",
             "vial_default_k00": 0x7E02,
             "uf2_sha256": hashlib.sha256(dual_uf2_bytes).hexdigest(),
             "uf2_size_bytes": len(dual_uf2_bytes),
@@ -361,7 +404,35 @@ class ArtifactVerifierTest(unittest.TestCase):
                 {"role": "oai", "interface": 2, "endpoint_bytes": 64},
             ],
         )
+        self.assertEqual(
+            result["usb_descriptor_contract"]["endpoint_addresses"],
+            [0x02, 0x04, 0x81, 0x83, 0x85],
+        )
+        self.assertEqual(
+            result["device_identity"],
+            {"manufacturer": "hirlu", "product": "Codex Micro Lab OAI LED"},
+        )
+        self.assertIn("keyboard_report_behavior", result["emulator_evidence"])
+        self.assertIn("joystick_report_behavior", result["emulator_evidence"])
+        self.assertEqual(
+            result["emulator_evidence"]["shared_keyboard_joystick_endpoint"],
+            {"keyboard_endpoint": 5, "joystick_endpoint": 5},
+        )
         self.assertIn("oai_raw_hid_receive", result["required_symbols"])
+
+    def test_dual_recovery_evidence_accepts_report_proof_but_not_configuration_proof(self) -> None:
+        result = self._verify(evidence=self.good_dual_evidence, profile="dual")
+        emulator = result["emulator_evidence"]
+        self.assertTrue(emulator["report_descriptors_verified"])
+        self.assertTrue(emulator["config_descriptor_recovery_used"])
+        self.assertFalse(emulator["configuration_descriptor_verified"])
+        self.assertFalse(emulator["descriptor_verified"])
+
+        for field, value in (("report_descriptors_verified", False), ("descriptor_verified", True)):
+            with self.subTest(field=field):
+                evidence = {**self.good_dual_evidence, field: value}
+                with self.assertRaisesRegex(self.verifier.VerificationError, field):
+                    self._verify(evidence=evidence, profile="dual")
 
     def test_dual_profile_rejects_missing_or_mismatched_interface_evidence(self) -> None:
         cases = (
@@ -383,6 +454,11 @@ class ArtifactVerifierTest(unittest.TestCase):
                 "usage",
             ),
             ("channels not isolated", {"channels_isolated": False}, "channels_isolated"),
+            (
+                "wrong compiled identity evidence",
+                {"device_identity": {"manufacturer": "other", "product": "Codex Micro Lab OAI LED"}},
+                "device identity",
+            ),
         )
         for name, changes, message in cases:
             with self.subTest(name=name):
@@ -405,6 +481,59 @@ class ArtifactVerifierTest(unittest.TestCase):
                         self.verifier.verify_usb_descriptor_contract(
                             self.good_elf, self.verifier.DUAL_PROFILE
                         )
+
+    def test_dual_static_descriptor_contract_rejects_endpoint_collisions_and_wrong_addresses(self) -> None:
+        cases = (
+            ("Vial IN collides with keyboard IN", {"vial_in_endpoint": 0x85}),
+            ("OAI OUT collides with Vial OUT", {"oai_out_endpoint": 0x02}),
+            ("Vial IN uses the wrong address", {"vial_in_endpoint": 0x82}),
+            ("OAI IN uses the wrong address", {"oai_in_endpoint": 0x84}),
+            ("Vial OUT has the wrong direction", {"vial_out_endpoint": 0x82}),
+        )
+        for name, options in cases:
+            with self.subTest(name=name):
+                fixture = make_dual_usb_descriptor_fixture(**options)
+                with mock.patch.object(self.verifier, "elf_binary", return_value=fixture):
+                    with self.assertRaisesRegex(self.verifier.VerificationError, "USB descriptor"):
+                        self.verifier.verify_usb_descriptor_contract(
+                            self.good_elf, self.verifier.DUAL_PROFILE
+                        )
+
+    def test_dual_artifact_identity_rejects_wrong_compiled_device_strings(self) -> None:
+        cases = (
+            (
+                "wrong manufacturer",
+                make_usb_device_descriptor() + make_usb_string_descriptor("other")
+                + make_usb_string_descriptor("Codex Micro Lab OAI LED"),
+            ),
+            (
+                "wrong product",
+                make_usb_device_descriptor() + make_usb_string_descriptor("hirlu")
+                + make_usb_string_descriptor("other"),
+            ),
+            (
+                "duplicate manufacturer",
+                make_usb_device_descriptor() + make_usb_string_descriptor("hirlu")
+                + make_usb_string_descriptor("hirlu")
+                + make_usb_string_descriptor("Codex Micro Lab OAI LED"),
+            ),
+            (
+                "swapped selected indices",
+                make_usb_device_descriptor(manufacturer_index=2, product_index=1)
+                + make_usb_string_descriptor("hirlu")
+                + make_usb_string_descriptor("Codex Micro Lab OAI LED"),
+            ),
+            ("missing device descriptor", b""),
+        )
+        for name, identity in cases:
+            with self.subTest(name=name):
+                fixture = (
+                    bytes(range(256))
+                    + make_dual_usb_descriptor_fixture()
+                    + identity
+                )
+                with self.assertRaisesRegex(self.verifier.VerificationError, "device|manufacturer|product"):
+                    self.verifier.verify_device_identity(fixture, self.verifier.DUAL_PROFILE)
 
     def test_dual_static_descriptor_contract_rejects_ambiguous_or_mistyped_hid_reports(self) -> None:
         cases = (

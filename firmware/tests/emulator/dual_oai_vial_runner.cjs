@@ -31,12 +31,14 @@ const VIAL_REPORT_BYTES = 32;
 const OAI_REPORT_BYTES = 64;
 const OAI_REPORT_ID = 6;
 const OAI_MAX_PAYLOAD = OAI_REPORT_BYTES - 3;
+const DEFAULT_DEADLINE_MS = 15000;
 // ChibiOS allocates the keyboard IN endpoint first, then the standard Vial RAW
 // pair, then OAI_RAW_IN followed immediately by OAI_RAW_OUT. These fallback
 // numbers are used only when the emulator truncates the configuration transfer
 // before interface 2 appears.
 const OAI_RAW_IN_EPNUM = 3;
 const OAI_RAW_OUT_EPNUM = 4;
+let activeDeadline = null;
 
 function usageHex(value, width) {
   return value.toString(16).padStart(width, '0');
@@ -79,10 +81,45 @@ function loadUF2(filename, rp2040) {
 
 function parseArguments(argv) {
   const [uf2Path, ...rest] = argv;
-  if (!uf2Path || rest.length !== 2 || rest[0] !== '--json' || !rest[1]) {
-    throw new Error('usage: node dual_oai_vial_runner.cjs <uf2-file> --json <evidence-file>');
+  if (!uf2Path || rest[0] !== '--json' || !rest[1]) {
+    throw new Error('usage: node dual_oai_vial_runner.cjs <uf2-file> --json <evidence-file> [--deadline-ms <ms>]');
   }
-  return { uf2Path, evidencePath: rest[1] };
+  let deadlineMs = DEFAULT_DEADLINE_MS;
+  if ((rest.length - 2) % 2 !== 0) {
+    throw new Error('usage: node dual_oai_vial_runner.cjs <uf2-file> --json <evidence-file> [--deadline-ms <ms>]');
+  }
+  for (let index = 2; index < rest.length; index += 2) {
+    if (rest[index] !== '--deadline-ms' || !/^\d+$/.test(rest[index + 1])) {
+      throw new Error('usage: node dual_oai_vial_runner.cjs <uf2-file> --json <evidence-file> [--deadline-ms <ms>]');
+    }
+    deadlineMs = Number(rest[index + 1]);
+  }
+  if (deadlineMs < 1) throw new Error('--deadline-ms must be at least 1');
+  return { uf2Path, evidencePath: rest[1], deadlineMs };
+}
+
+function createDeadline(deadlineMs, evidencePath) {
+  const deadlineAt = Date.now() + deadlineMs;
+  const temporaryEvidencePath = `${evidencePath}.tmp-${process.pid}`;
+  const cleanup = () => {
+    if (fs.existsSync(temporaryEvidencePath)) fs.unlinkSync(temporaryEvidencePath);
+  };
+  const timer = setTimeout(() => {
+    cleanup();
+    console.error(`DUAL OAI/VIAL EMULATOR SMOKE: FAIL: emulator deadline exceeded after ${deadlineMs}ms`);
+    process.exit(1);
+  }, deadlineMs);
+  return {
+    temporaryEvidencePath,
+    check() {
+      if (Date.now() >= deadlineAt) throw new Error(`emulator deadline exceeded after ${deadlineMs}ms`);
+    },
+    cleanup,
+    clear() {
+      clearTimeout(timer);
+      cleanup();
+    },
+  };
 }
 
 function parseConfig(desc) {
@@ -96,6 +133,7 @@ function parseConfig(desc) {
       current = {
         number: desc[offset + 2], cls: desc[offset + 5], sub: desc[offset + 6],
         proto: desc[offset + 7], inEp: -1, outEp: -1, inBytes: 0, outBytes: 0,
+        inAddress: null, outAddress: null,
         reportBytes: 0,
       };
       interfaces.push(current);
@@ -106,9 +144,11 @@ function parseConfig(desc) {
       const bytes = desc[offset + 4] | (desc[offset + 5] << 8);
       if (address & 0x80) {
         current.inEp = address & 0x0f;
+        current.inAddress = address;
         current.inBytes = bytes;
       } else {
         current.outEp = address & 0x0f;
+        current.outAddress = address;
         current.outBytes = bytes;
       }
     }
@@ -166,7 +206,7 @@ function reportDescriptorSetup(interfaceNumber, reportLength) {
 }
 
 function routeFrame(frame, channels) {
-  if (frame.length === channels.vial.inBytes && (frame[0] === 0x01 || frame[0] === 0x04)) return 'vial';
+  if (frame.length === channels.vial.inBytes && (frame[0] === 0x01 || frame[0] === 0x04 || frame[0] === 0x05)) return 'vial';
   if (frame.length === channels.oai.inBytes && frame[0] === OAI_REPORT_ID && frame[1] === 2) return 'oai';
   return null;
 }
@@ -179,11 +219,12 @@ function hasValidatedDualConfigPrefix(desc) {
   if (desc.length < 9 || desc[0] !== 9 || desc[1] !== DescriptorType.Configration || desc[4] !== 3) return false;
   const interfaces = parseConfig(desc);
   const keyboard = interfaces.find((iface) =>
-    iface.number === 0 && iface.cls === 3 && iface.sub === 1 && iface.proto === 1 && iface.inEp >= 0
+    iface.number === 0 && iface.cls === 3 && iface.sub === 1 && iface.proto === 1 &&
+    iface.inEp >= 0 && iface.inAddress === 0x85
   );
   const vial = interfaces.find((iface) =>
     iface.number === 1 && iface.cls === 3 && iface.sub === 0 && iface.proto === 0 &&
-    iface.inEp >= 0 && iface.inBytes === VIAL_REPORT_BYTES
+    iface.inEp >= 0 && iface.inAddress === 0x81 && iface.inBytes === VIAL_REPORT_BYTES
   );
   return Boolean(keyboard && vial);
 }
@@ -200,17 +241,20 @@ function recoverTruncatedConfig(interfaces, { complete, prefixValidated }) {
     // rp2040js stops after the Vial IN endpoint. ChibiOS places Vial OUT next;
     // only fill this absent endpoint and record that it is not descriptor proof.
     vial.outEp = vial.inEp + 1;
+    vial.outAddress = 0x02;
     vial.outBytes = VIAL_REPORT_BYTES;
     recovery.used = true;
     recovery.syntheticVialOutEndpoint = {
       interface_number: 1,
       out_endpoint: vial.outEp,
+      out_endpoint_address: vial.outAddress,
       not_descriptor_proof: true,
     };
   }
   if (!interfaces.some((iface) => iface.number === 2)) {
     interfaces.push({
       number: 2, cls: 3, sub: 0, proto: 0, inEp: -1, outEp: -1,
+      inAddress: null, outAddress: null,
       inBytes: OAI_REPORT_BYTES, outBytes: OAI_REPORT_BYTES, reportBytes: 0,
     });
     const oai = interfaces[interfaces.length - 1];
@@ -219,11 +263,15 @@ function recoverTruncatedConfig(interfaces, { complete, prefixValidated }) {
     // configuration-descriptor proof.
     oai.inEp = OAI_RAW_IN_EPNUM;
     oai.outEp = OAI_RAW_OUT_EPNUM;
+    oai.inAddress = 0x83;
+    oai.outAddress = 0x04;
     recovery.used = true;
     recovery.syntheticOaiEndpoint = {
       interface_number: 2,
       in_endpoint: OAI_RAW_IN_EPNUM,
       out_endpoint: OAI_RAW_OUT_EPNUM,
+      in_endpoint_address: oai.inAddress,
+      out_endpoint_address: oai.outAddress,
       not_descriptor_proof: true,
     };
   }
@@ -231,9 +279,16 @@ function recoverTruncatedConfig(interfaces, { complete, prefixValidated }) {
 }
 
 function hasDistinctRawEndpointPairs(vial, oai) {
+  const address = (iface, direction) => iface[`${direction}Address`] ?? iface[`${direction}Ep`];
   return Boolean(vial && oai && vial.number !== oai.number &&
     vial.inEp >= 0 && oai.inEp >= 0 && vial.outEp >= 0 && oai.outEp >= 0 &&
-    vial.inEp !== oai.inEp && vial.outEp !== oai.outEp);
+    address(vial, 'in') !== address(oai, 'in') && address(vial, 'out') !== address(oai, 'out') &&
+    address(vial, 'in') !== address(vial, 'out') && address(oai, 'in') !== address(oai, 'out'));
+}
+
+function readUsbStringDescriptor(descriptor) {
+  if (!descriptor || descriptor.length < 2 || descriptor[1] !== 3 || descriptor[0] > descriptor.length || descriptor[0] < 2 || descriptor[0] % 2 !== 0) return null;
+  return descriptor.subarray(2, descriptor[0]).toString('utf16le');
 }
 
 function readOaiFrame(frame) {
@@ -274,9 +329,13 @@ function oaiHidEnumerated(oai, reportDescriptors, reportDescriptorRequests) {
 }
 
 function main() {
-  const { uf2Path, evidencePath } = parseArguments(process.argv.slice(2));
+  const { uf2Path, evidencePath, deadlineMs } = parseArguments(process.argv.slice(2));
+  activeDeadline = createDeadline(deadlineMs, evidencePath);
+  activeDeadline.check();
   if (!fs.existsSync(uf2Path)) throw new Error(`pre-hardware build gate: dual OAI/Vial UF2 is unavailable: ${uf2Path}`);
+  activeDeadline.check();
   const uf2Data = fs.readFileSync(uf2Path);
+  activeDeadline.check();
   const uf2Sha256 = crypto.createHash('sha256').update(uf2Data).digest('hex');
 
   const sim = new Simulator();
@@ -318,6 +377,8 @@ function main() {
   let reportDescriptorTarget = null;
   let reportDescriptorDone = false;
   let deviceDescriptor = Buffer.alloc(0);
+  let manufacturerString = null;
+  let productString = null;
   const captures = new Map();
   const txQueues = new Map();
   const armedReads = new Map();
@@ -326,13 +387,15 @@ function main() {
 
   const log = (message) => eventLog.push(`[${(sim.clock.micros / 1000).toFixed(1)}ms] ${message}`);
   const endpointOwner = (endpoint, direction = 'in') => {
+    activeDeadline.check();
     const iface = interfaces.find((candidate) => candidate[`${direction}Ep`] === endpoint);
     return iface ? iface.number : null;
   };
 
   usb.onUSBEnabled = () => { log('USB controller enabled'); usb.resetDevice(); };
-  usb.onResetReceived = () => { resetSeen = true; log('USB reset'); };
+  usb.onResetReceived = () => { activeDeadline.check(); resetSeen = true; log('USB reset'); };
   usb.onEndpointWrite = (endpoint, buffer) => {
+    activeDeadline.check();
     const bytes = Buffer.from(buffer);
     if (endpoint === 0) {
       ep0Activity++;
@@ -353,6 +416,27 @@ function main() {
       }
       if (enumState === 'device' && bytes[1] === DescriptorType.Device) {
         deviceDescriptor = bytes;
+        const manufacturerIndex = bytes[14];
+        const productIndex = bytes[15];
+        enumState = 'manufacturer-string';
+        usb.sendSetupPacket(createSetupPacket({
+          bRequest: 6, wValue: (DescriptorType.String << 8) | manufacturerIndex,
+          wIndex: 0x0409, wLength: 255, dataDirection: DataDirection.DeviceToHost,
+          type: SetupType.Standard, recipient: SetupRecipient.Device,
+        }));
+      } else if (enumState === 'manufacturer-string' && bytes[1] === DescriptorType.String) {
+        manufacturerString = readUsbStringDescriptor(bytes);
+        if (manufacturerString === null) throw new Error('malformed USB manufacturer string descriptor');
+        const productIndex = deviceDescriptor[15];
+        enumState = 'product-string';
+        usb.sendSetupPacket(createSetupPacket({
+          bRequest: 6, wValue: (DescriptorType.String << 8) | productIndex,
+          wIndex: 0x0409, wLength: 255, dataDirection: DataDirection.DeviceToHost,
+          type: SetupType.Standard, recipient: SetupRecipient.Device,
+        }));
+      } else if (enumState === 'product-string' && bytes[1] === DescriptorType.String) {
+        productString = readUsbStringDescriptor(bytes);
+        if (productString === null) throw new Error('malformed USB product string descriptor');
         enumState = 'config-header';
         usb.sendSetupPacket(getDescriptorPacket(DescriptorType.Configration, 9));
       } else if (enumState === 'config-header' && bytes.length === 9 && bytes[1] === DescriptorType.Configration) {
@@ -384,6 +468,7 @@ function main() {
     }
   };
   usb.onEndpointRead = (endpoint, byteCount) => {
+    activeDeadline.check();
     if (endpointOwner(endpoint, 'out') !== null && txQueues.get(endpoint)?.length) {
       usb.endpointReadDone(endpoint, txQueues.get(endpoint).shift());
     } else {
@@ -392,6 +477,7 @@ function main() {
   };
 
   function sendFrame(channel, frame) {
+    activeDeadline.check();
     if (frame.length !== channel.inBytes) throw new Error(`frame must be ${channel.inBytes} bytes`);
     if (routeFrame(frame, { vial, oai }) !== channel.kind) throw new Error(`frame routed to the wrong HID channel: ${channel.kind}`);
     if (!txQueues.has(channel.outEp)) txQueues.set(channel.outEp, []);
@@ -405,12 +491,14 @@ function main() {
 
   const cycleNanos = 1e9 / 125000000;
   const wallStart = Date.now();
+  const deadlineAt = wallStart + deadlineMs;
   let pioTick = 0;
   function runForMicros(micros) {
+    activeDeadline.check();
     const target = sim.clock.nanos + micros * 1000;
     let stallGuard = 0;
     while (sim.clock.nanos < target) {
-      if (Date.now() - wallStart > 25 * 60 * 1000) throw new Error('emulator wall-clock budget exceeded');
+      activeDeadline.check();
       const before = sim.clock.nanos;
       if (mcu.core.waiting) sim.clock.tick(Math.min(sim.clock.nanosToNextAlarm, target - sim.clock.nanos));
       else sim.clock.tick(mcu.core.executeInstruction() * cycleNanos);
@@ -428,6 +516,7 @@ function main() {
   let addressAttempts = 0;
   let lastActivity = 0;
   for (let attempt = 0; attempt < 80 && !configured; attempt++) {
+    activeDeadline.check();
     runForMicros(100000);
     if (resetSeen && enumState === 'address' && ep0Activity === 0 && addressAttempts < 5) {
       addressAttempts++;
@@ -454,6 +543,7 @@ function main() {
   const candidates = vendorHids(interfaces);
   if (!keyboard) throw new Error('USB configuration has no boot keyboard HID interface');
   for (const candidate of candidates) {
+    activeDeadline.check();
     const reportLength = candidate.reportBytes || 255;
     enumState = 'report-descriptor';
     reportDescriptorTarget = candidate.number;
@@ -521,6 +611,65 @@ function main() {
   mcu.gpio[12].setInputValue(true);
   runForMicros(150000);
   const keyFrame = readOaiMessages(oaiFrames().slice(beforeKey)).find((json) => json === '{"method":"v.oai.hid","params":{"k":"AG00","act":1}}\r\n');
+  const beforeKeyboardKey = (captures.get(keyboard.inEp) || []).length;
+  // Rebind K00 through the live Vial dynamic-keymap path, then press SW1.
+  // This produces a genuine boot-keyboard report while retaining the OAI AG00
+  // assertion above; both transports and the dynamic map are covered.
+  const setK00Esc = Buffer.alloc(VIAL_REPORT_BYTES);
+  setK00Esc[0] = 0x05;
+  setK00Esc[5] = 0x29;
+  sendFrame(vial, setK00Esc);
+  runForMicros(250000);
+  mcu.gpio[12].setInputValue(false);
+  runForMicros(150000);
+  mcu.gpio[12].setInputValue(true);
+  runForMicros(150000);
+  const keyboardFrames = () => captures.get(keyboard.inEp) || [];
+  const keyboardReports = keyboardFrames().filter((frame) => frame.length === 9 && frame[0] === 1);
+  const keyboardReportsAfterInput = keyboardFrames()
+    .slice(beforeKeyboardKey)
+    .filter((frame) => frame.length === 9 && frame[0] === 1);
+  const keyboardReportsAfterKey = keyboardReportsAfterInput.length;
+  const keyboardPressSeen = keyboardReportsAfterInput.some((frame) => frame.subarray(2).some((byte) => byte !== 0));
+  const keyboardReleaseSeen = keyboardReportsAfterInput.some((frame) => frame.subarray(2).every((byte) => byte === 0));
+  const keyboardReportBehavior = {
+    report_bytes: 8,
+    report_count: keyboardReports.length,
+    reports_after_key: Math.max(0, keyboardReportsAfterKey),
+    press_seen: keyboardPressSeen,
+    release_seen: keyboardReleaseSeen,
+  };
+
+  const joystickFrames = () => keyboardFrames().filter((frame) => frame.length >= 5 && frame[0] === 7);
+  const sampleJoystick = (x12, y12) => {
+    const before = joystickFrames().length;
+    mcu.adc.channelValues[0] = x12;
+    mcu.adc.channelValues[1] = y12;
+    runForMicros(700000);
+    return joystickFrames().slice(before);
+  };
+  const joystickA = sampleJoystick(4000, 100);
+  const joystickB = sampleJoystick(100, 4000);
+  const lastJoystick = (frames) => frames.length ? frames[frames.length - 1] : null;
+  const joystickAxes = (frame) => {
+    if (!frame) return null;
+    const signed16 = (offset) => {
+      const value = frame[offset] | (frame[offset + 1] << 8);
+      return value >= 0x8000 ? value - 0x10000 : value;
+    };
+    return [signed16(1), signed16(3)];
+  };
+  const joystickAAxes = joystickAxes(lastJoystick(joystickA));
+  const joystickBAxes = joystickAxes(lastJoystick(joystickB));
+  const joystickReportBehavior = {
+    report_id: 7,
+    report_count: joystickFrames().length,
+    axes_a: joystickAAxes,
+    axes_b: joystickBAxes,
+    axes_swung: Boolean(joystickAAxes && joystickBAxes &&
+      Math.sign(joystickAAxes[0]) === -Math.sign(joystickBAxes[0]) &&
+      Math.sign(joystickAAxes[1]) === -Math.sign(joystickBAxes[1])),
+  };
 
   const vialEvidence = { usage: 'ff60:0061', report_id: null, report_bytes: 32 };
   const oaiEvidence = { usage: 'ff00:0061', report_id: 6, report_bytes: 64 };
@@ -546,9 +695,18 @@ function main() {
     config_descriptor_recovery_used: configRecovery.used,
     synthetic_vial_out_endpoint: configRecovery.syntheticVialOutEndpoint,
     synthetic_oai_endpoint: configRecovery.syntheticOaiEndpoint,
-    keyboard_hid_enumerated: true,
+    keyboard_hid_enumerated: Boolean(keyboard && keyboardReports.length > 0),
+    keyboard_report_behavior: keyboardReportBehavior,
+    joystick_report_behavior: joystickReportBehavior,
+    shared_keyboard_joystick_endpoint: {
+      keyboard_endpoint: keyboard.inEp,
+      joystick_endpoint: keyboard.inEp,
+    },
     oai_hid_enumerated: oaiHidEnumerated(oai, reportDescriptors, reportDescriptorRequests),
-    descriptor_verified: reportDescriptorMatches(reportDescriptors.get(vial.number), vialEvidence) && reportDescriptorMatches(reportDescriptors.get(oai.number), oaiEvidence),
+    report_descriptors_verified: reportDescriptorMatches(reportDescriptors.get(vial.number), vialEvidence) && reportDescriptorMatches(reportDescriptors.get(oai.number), oaiEvidence),
+    configuration_descriptor_verified: !configRecovery.used,
+    descriptor_verified: !configRecovery.used && reportDescriptorMatches(reportDescriptors.get(vial.number), vialEvidence) && reportDescriptorMatches(reportDescriptors.get(oai.number), oaiEvidence),
+    device_identity: { manufacturer: manufacturerString, product: productString },
     vial_protocol_ack: vialProtocolAck,
     vial_default_k00: vialDefaultK00,
     rgbcfg_ack: rgbcfgResult.acknowledged,
@@ -562,18 +720,40 @@ function main() {
     gp17_edges_after_thstatus: edgesAfterStatus - edgesBeforeStatus,
     usb_events: eventLog,
   };
+  activeDeadline.check();
   fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
-  fs.writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
-  console.log(JSON.stringify(evidence));
+  fs.writeFileSync(activeDeadline.temporaryEvidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+  activeDeadline.check();
+  const checkNames = [
+    'vid_pid', 'report_descriptors_verified', 'keyboard_hid_enumerated',
+    'oai_hid_enumerated', 'vial_protocol_ack', 'vial_default_k00',
+    'rgbcfg_ack', 'thstatus_ack', 'device_status_ack',
+    'task_status_fragment_count', 'key_event', 'manufacturer', 'product',
+    'ws2812_activity', 'channels_isolated',
+  ];
   const checks = [
-    evidence.vid_pid === '303a:8360', evidence.descriptor_verified,
+    evidence.vid_pid === '303a:8360', evidence.report_descriptors_verified,
     evidence.keyboard_hid_enumerated, evidence.oai_hid_enumerated, evidence.vial_protocol_ack,
     evidence.vial_default_k00 !== null, evidence.rgbcfg_ack,
     evidence.thstatus_ack, evidence.device_status_ack,
     evidence.task_status_fragment_count > 1, evidence.key_event !== null,
+    evidence.device_identity.manufacturer === 'hirlu', evidence.device_identity.product === 'Codex Micro Lab OAI LED',
     evidence.ws2812_activity, evidence.channels_isolated,
   ];
-  if (!checks.every(Boolean)) throw new Error(`dual OAI/Vial smoke failed; evidence written to ${evidencePath}`);
+  const failedChecks = checkNames.filter((_name, index) => !checks[index]);
+  if (failedChecks.length) {
+    const keyboardFrameSummary = (captures.get(keyboard.inEp) || [])
+      .map((frame) => `${frame.length}:${frame[0]}`)
+      .join(',');
+    throw new Error(
+      `dual OAI/Vial smoke failed; evidence was not published (${failedChecks.join(', ')}; ` +
+      `keyboard_in_bytes=${keyboard.inBytes}; keyboard_frames=${keyboardFrameSummary || 'none'})`
+    );
+  }
+  activeDeadline.check();
+  fs.renameSync(activeDeadline.temporaryEvidencePath, evidencePath);
+  activeDeadline.clear();
+  console.log(JSON.stringify(evidence));
   process.exit(0);
 }
 
@@ -589,6 +769,7 @@ module.exports = {
   hasValidatedDualConfigPrefix,
   recoverTruncatedConfig,
   hasDistinctRawEndpointPairs,
+  readUsbStringDescriptor,
   oaiHidEnumerated,
   routeFrame,
   readOaiMessages,
@@ -596,7 +777,8 @@ module.exports = {
 
 if (require.main === module) {
   try { main(); } catch (error) {
+    if (activeDeadline) activeDeadline.cleanup();
     console.error(`DUAL OAI/VIAL EMULATOR SMOKE: FAIL: ${error.message}`);
-    process.exitCode = 1;
+    process.exit(1);
   }
 }

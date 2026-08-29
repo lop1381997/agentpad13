@@ -4,7 +4,7 @@
 // a second runtime encoder path.
 #include QMK_KEYBOARD_H
 
-__attribute__((used, noinline, externally_visible))
+__attribute__((used, noinline))
 bool encoder_update_user(uint8_t index, bool clockwise) {
     (void)index;
     (void)clockwise;
