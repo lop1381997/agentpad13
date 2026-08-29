@@ -26,6 +26,20 @@
       "product": "Codex Micro Lab OAI LED"
     },
     "device_status_ack": true,
+    "encoder_rotation_behavior": {
+      "dynamic_map_write_ack": true,
+      "initial_map_readback": {
+        "ccw": 32274,
+        "clockwise": 32273
+      },
+      "initial_map_readback_verified": true,
+      "initial_rotation_emitted_oai_event": true,
+      "initial_rotation_event": "{\"method\":\"v.oai.hid\",\"params\":{\"k\":\"ENC_CW\",\"act\":2}}\r\n",
+      "map_readback_after_write": 82,
+      "programmed_clockwise_keycode": 82,
+      "rotation_after_map_write_seen": true,
+      "rotation_used_programmed_keycode": true
+    },
     "joystick_report_behavior": {
       "axes_a": [
         -486,
@@ -36,7 +50,7 @@
         -486
       ],
       "axes_swung": true,
-      "report_count": 3,
+      "report_count": 2,
       "report_id": 7
     },
     "key_event": {
@@ -48,7 +62,7 @@
       "press_seen": true,
       "release_seen": true,
       "report_bytes": 8,
-      "report_count": 2,
+      "report_count": 4,
       "reports_after_key": 2
     },
     "oai_hid_enumerated": true,

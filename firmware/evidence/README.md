@@ -11,8 +11,8 @@ The current port rebuild is 93,696 bytes with SHA-256
 three-interface descriptor, the exact Vial `FF60:61` and OAI `FF00:61`
 contracts, exact compiled endpoint address set (`0x85`, `0x81`/`0x02`,
 `0x83`/`0x04`), shared keyboard/joystick press/release and axis behavior,
-encoder compatibility, both protocol paths, OAI event/LED behavior and
-response isolation. Its `config_descriptor_recovery_used` and synthetic
+runtime Vial encoder-map readback/write/rotation behavior, both protocol paths,
+OAI event/LED behavior and response isolation. Its `config_descriptor_recovery_used` and synthetic
 endpoint fields describe rp2040js transport recovery only; they are never
 configuration-descriptor proof. That proof is recorded by the ELF-derived
 static verifier in `dual-oai-vial-current-manifest.json`.

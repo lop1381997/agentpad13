@@ -163,8 +163,9 @@ OAI identity and wire contract (`303A:8360`, `FF00:61`, Report ID 6, 64-byte
 reports) while exposing Vial on a separate `FF60:61`, report-ID-less, 32-byte
 interface. The exact three-interface descriptor, ELF/UF2 equivalence, both
 protocol paths, unique endpoint addresses (`0x85`, `0x81`/`0x02`,
-`0x83`/`0x04`), shared keyboard/joystick reports, encoder compatibility and
-LED/event behavior pass in the recorded offline evidence. The emulator’s
+`0x83`/`0x04`), shared keyboard/joystick reports, runtime Vial encoder-map
+readback/write/rotation behavior and LED/event behavior pass in the recorded
+offline evidence. The emulator’s
 truncated configuration recovery is explicitly synthetic and never counts as
 configuration-descriptor proof; the ELF-derived static verifier is authoritative.
 Physical validation is pending; use

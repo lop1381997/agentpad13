@@ -655,7 +655,11 @@ def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[
             if keyboard[4] != 1 or len(keyboard_endpoints) != 1:
                 continue
             keyboard_endpoint = keyboard_endpoints[0]
-            if not (keyboard_endpoint[2] & 0x80) or (keyboard_endpoint[2] == 0):
+            if (
+                not (keyboard_endpoint[2] & 0x80)
+                or keyboard_endpoint[2] == 0
+                or (keyboard_endpoint[3] & 0x03) != 0x03
+            ):
                 continue
             if profile.keyboard_in_endpoint_address is not None and (
                 keyboard_endpoint[2] != profile.keyboard_in_endpoint_address
@@ -702,6 +706,10 @@ def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[
                     raise VerificationError(
                         f"USB descriptor contract missing {expected.role} raw interface endpoint pair"
                     )
+                if any((endpoint[3] & 0x03) != 0x03 for endpoint in endpoints):
+                    raise VerificationError(
+                        f"USB descriptor contract requires interrupt transfer type for {expected.role} endpoints"
+                    )
                 directions = {bool(endpoint[2] & 0x80) for endpoint in endpoints}
                 sizes = {endpoint[4] | (endpoint[5] << 8) for endpoint in endpoints}
                 if directions != {False, True} or sizes != {expected.report_bytes}:
@@ -746,6 +754,72 @@ def verify_usb_descriptor_contract(elf: Path, profile: ArtifactProfile) -> dict[
     raise VerificationError("USB descriptor contract is missing the required composite HID interfaces")
 
 
+def _indexed_usb_string_tables(binary: bytes) -> list[dict[int, str]]:
+    """Parse contiguous USB string-descriptor tables and resolve their indices.
+
+    QMK emits the language descriptor at one end of the table.  Depending on
+    linker layout, the remaining descriptors are emitted either in ascending
+    or descending index order; the language descriptor is the unambiguous index
+    zero anchor in both forms.
+    """
+    descriptors: dict[int, tuple[int, str]] = {}
+    for offset in range(max(0, len(binary) - 1)):
+        length = binary[offset]
+        if length < 2 or length % 2 or offset + length > len(binary):
+            continue
+        if binary[offset + 1] != 3:
+            continue
+        payload = binary[offset + 2 : offset + length]
+        try:
+            value = payload.decode("utf-16le")
+        except UnicodeDecodeError:
+            continue
+        descriptors[offset] = (offset + length, value)
+
+    predecessors: dict[int, list[tuple[int, str]]] = {}
+    for offset, (end, value) in descriptors.items():
+        predecessors.setdefault(end, []).append((offset, value))
+    tables: list[dict[int, str]] = []
+    for language_offset, (language_end, language) in descriptors.items():
+        language_bytes = binary[language_offset : language_end]
+        if language_bytes != bytes((4, 3, 0x09, 0x04)):
+            continue
+        before: list[str] = []
+        cursor = language_offset
+        while True:
+            candidates = [
+                (end, offset, value)
+                for end, entries in predecessors.items()
+                if 0 <= cursor - end <= 3
+                and all(byte == 0 for byte in binary[end:cursor])
+                for offset, value in entries
+            ]
+            if not candidates:
+                break
+            end, previous, value = max(candidates, key=lambda item: item[0])
+            before.append(value)
+            cursor = previous
+        after: list[str] = []
+        cursor = language_end
+        while True:
+            candidates = [
+                (offset, end, value)
+                for offset, (end, value) in descriptors.items()
+                if 0 <= offset - cursor <= 3
+                and all(byte == 0 for byte in binary[cursor:offset])
+            ]
+            if not candidates:
+                break
+            offset, end, value = min(candidates, key=lambda item: item[0])
+            after.append(value)
+            cursor = end
+        if before and not after:
+            tables.append({index + 1: value for index, value in enumerate(before)})
+        elif after:
+            tables.append({index + 1: value for index, value in enumerate(after)})
+    return tables
+
+
 def verify_device_identity(binary: bytes, profile: ArtifactProfile) -> dict[str, str]:
     """Require the expected compiled USB identity and its device-descriptor indices.
 
@@ -779,44 +853,27 @@ def verify_device_identity(binary: bytes, profile: ArtifactProfile) -> dict[str,
     _device_offset, device = device_descriptors[0]
     manufacturer_index = device[14]
     product_index = device[15]
-    if profile.manufacturer is not None and manufacturer_index != 1:
-        raise VerificationError(
-            f"compiled USB manufacturer string index must be 1; found {manufacturer_index}"
-        )
-    if profile.product is not None and product_index != 2:
-        raise VerificationError(
-            f"compiled USB product string index must be 2; found {product_index}"
-        )
-
-    string_values: dict[str, int] = {}
-    for offset in range(max(0, len(binary) - 1)):
-        length = binary[offset]
-        if length < 2 or length % 2 or offset + length > len(binary):
-            continue
-        if binary[offset + 1] != 3:
-            continue
-        payload = binary[offset + 2 : offset + length]
-        try:
-            value = payload.decode("utf-16le")
-        except UnicodeDecodeError:
-            continue
-        if value:
-            string_values[value] = string_values.get(value, 0) + 1
+    tables = _indexed_usb_string_tables(binary)
+    if not tables:
+        raise VerificationError("compiled USB string descriptor table is missing its language descriptor")
 
     expected = {
-        "manufacturer": profile.manufacturer,
-        "product": profile.product,
+        "manufacturer": (profile.manufacturer, manufacturer_index),
+        "product": (profile.product, product_index),
     }
+    matching_tables = []
+    for table in tables:
+        if all(value is None or table.get(index) == value for value, index in expected.values()):
+            matching_tables.append(table)
+    if len(matching_tables) != 1:
+        raise VerificationError(
+            "compiled USB manufacturer/product string indices do not resolve to the locked identity"
+        )
+    table = matching_tables[0]
     identity: dict[str, str] = {}
-    for field, value in expected.items():
-        if value is None:
-            continue
-        if string_values.get(value) != 1:
-            raise VerificationError(
-                f"compiled USB {field} string must have one exact descriptor {value!r}; "
-                f"found {string_values.get(value, 0)}"
-            )
-        identity[field] = value
+    for field, (value, index) in expected.items():
+        if value is not None:
+            identity[field] = table[index]
     return identity
 
 
@@ -900,6 +957,25 @@ def verify_evidence(
         )
     if len(profile.interfaces) > 1 and evidence.get("channels_isolated") is not True:
         raise VerificationError("emulator evidence did not prove channels_isolated")
+    if len(profile.interfaces) > 1:
+        encoder = evidence.get("encoder_rotation_behavior")
+        required_encoder_fields = (
+            "initial_map_readback_verified",
+            "initial_rotation_emitted_oai_event",
+            "dynamic_map_write_ack",
+            "rotation_after_map_write_seen",
+            "rotation_used_programmed_keycode",
+        )
+        if not isinstance(encoder, Mapping) or any(
+            encoder.get(field) is not True for field in required_encoder_fields
+        ):
+            raise VerificationError(
+                "emulator evidence did not prove runtime Vial encoder-map compatibility"
+            )
+        if encoder.get("map_readback_after_write") != encoder.get("programmed_clockwise_keycode"):
+            raise VerificationError(
+                "emulator evidence did not prove the programmed encoder keycode read back"
+            )
 
 
 def verify(
@@ -987,6 +1063,7 @@ def verify(
                 "shared_keyboard_joystick_endpoint": evidence.get(
                     "shared_keyboard_joystick_endpoint"
                 ),
+                "encoder_rotation_behavior": evidence["encoder_rotation_behavior"],
             }
         )
     return manifest

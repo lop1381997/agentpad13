@@ -116,3 +116,61 @@ runbook's physical result row remains `PENDING`; it requires explicit
 per-flash authorization and records recovery separately. The dual emulator
 uses its documented rp2040js truncated-configuration recovery metadata; the
 static ELF verifier remains the descriptor proof.
+
+## Review-round-2 remediation
+
+### Root causes
+
+- Encoder compatibility was only represented by a compilable legacy callback
+  symbol. The previous test never exercised Vial's live encoder-map protocol or
+  the firmware's quadrature path, so it could not establish runtime behavior.
+- Compiled identity verification decoded every USB string descriptor and looked
+  for expected values globally. It did not resolve the manufacturer/product
+  indices selected by the device descriptor, allowing the wrong indexed strings
+  to pass when the expected values appeared elsewhere.
+- The static HID endpoint contract checked direction, size and address but
+  ignored `bmAttributes` byte 3, so a bulk endpoint could pass as HID transport.
+
+### Tests and fixes
+
+- The dual emulator now uses Vial's runtime encoder get/set commands, stimulates
+  both quadrature directions, observes the OAI encoder event, reads the changed
+  clockwise keycode back, and confirms a subsequent rotation emits the
+  programmed keyboard keycode. The evidence and manifest require every one of
+  those checks.
+- The verifier now anchors USB string tables at the language descriptor, maps
+  descriptor indices in both linker layouts used by the artifact fixtures, and
+  resolves the device descriptor's actual manufacturer/product indices. A
+  fixture with correct strings at the wrong indices is rejected.
+- Keyboard, Vial and OAI endpoint descriptors now require interrupt transfer
+  type (`bmAttributes & 0x03 == 0x03`). A bulk-endpoint fixture is rejected.
+- The dual smoke watchdog allowance is 30 seconds because the real encoder
+  stimulus adds bounded emulator work; the independent parent watchdog remains
+  the process-wide hang boundary.
+
+The round-2 generated evidence was produced by the real dual UF2 and records:
+`initial_map_readback_verified`, `initial_rotation_emitted_oai_event`,
+`dynamic_map_write_ack`, `map_readback_after_write == 0x52`,
+`rotation_after_map_write_seen`, and `rotation_used_programmed_keycode` all
+true. The regenerated ELF/UF2 manifest resolves `hirlu` / `Codex Micro Lab OAI
+LED`, verifies the exact interrupt endpoint contract, and preserves the UF2
+SHA-256 `ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c`.
+
+### Round-2 verification record
+
+- Focused TDD set: 58 tests passed, including the runtime encoder test, the
+  descriptor-index identity fixture and the bulk-endpoint fixture.
+- Full `firmware/tests/codex_oai` matrix: 157 tests passed, 0 failures.
+- Emulator matrix: `smoke:default`, `smoke:vial`, `smoke:codex-oai`,
+  `smoke:vial-oai` and `smoke:dual-oai-vial` all returned PASS. The dual smoke
+  used the independent 30-second watchdog and the final evidence capture
+  returned the locked UF2 hash and all encoder fields above.
+- Static verifier: PASS with the matching disposable ELF; it resolved the
+  device descriptor's selected strings and verified interrupt transfer type on
+  keyboard, Vial and OAI endpoints.
+- `python3 -B manifest_selfverify.py`: 9/9 checks passed; 156 files and
+  56,488,941 bytes agree with `release/MANIFEST.md`.
+- `node --check` passed for both dual emulator scripts, JSON parsing passed for
+  the generated evidence and manifest, and `git diff --check` passed.
+
+No flash, reset, push or merge was performed.

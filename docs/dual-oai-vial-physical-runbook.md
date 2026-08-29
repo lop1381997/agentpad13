@@ -43,9 +43,9 @@ raw HID. The two raw interfaces are:
 - Vial: usage `FF60:61`, no report ID, 32-byte input/output reports.
 - OAI: usage `FF00:61`, Report ID `6`, 64-byte input/output reports.
 
-The compiled-artifact static proof records the unique endpoint addresses:
-keyboard IN `0x85` (shared with joystick reports), Vial IN/OUT `0x81`/`0x02`,
-and OAI IN/OUT `0x83`/`0x04`. The emulator’s truncated-configuration recovery
+The compiled-artifact static proof records the unique interrupt endpoint
+addresses: keyboard IN `0x85` (shared with joystick reports), Vial IN/OUT
+`0x81`/`0x02`, and OAI IN/OUT `0x83`/`0x04`. The emulator’s truncated-configuration recovery
 metadata is transport scaffolding only; it is not configuration-descriptor
 proof. That proof comes from the ELF-derived static verifier.
 
@@ -61,6 +61,9 @@ Load the local `.vial` definition from the candidate path above. Hold **SW1
   and reconnect, and confirm the edit persists.
 - **encoder-map persistence:** change both encoder directions and confirm the
   assignments survive reconnect.
+- The offline emulator evidence already proves a real Vial encoder get/set
+  round trip and a subsequent clockwise rotation using the programmed
+  `KC_UP`; the physical check above remains required for persistence.
 - **macro persistence:** create a short macro, invoke it, reconnect and invoke
   it again.
 - **custom OAI assignment:** assign an OAI custom keycode to a different key or

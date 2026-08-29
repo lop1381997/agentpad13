@@ -9,7 +9,7 @@
         "smoke:vial": "node runner.cjs ../../../release/firmware/prebuilt/agentpad13.uf2 04424c440118081f000000000000000000000000000000000000000000000000",
         "smoke:codex-oai": "node oai_runner.cjs ../../../release/firmware/prebuilt/agentpad13_codex_oai.uf2 --json ../../evidence/codex-oai-emulator.json",
         "smoke:vial-oai": "node vial_oai_runner.cjs ../../../release/firmware/prebuilt/agentpad13_vial_oai.uf2 --json ../../evidence/vial-oai-emulator.json",
-        "smoke:dual-oai-vial": "node dual_oai_vial_watchdog.cjs ../../../release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2 --json ../../evidence/dual-oai-vial-emulator.json --deadline-ms 20000"
+        "smoke:dual-oai-vial": "node dual_oai_vial_watchdog.cjs ../../../release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2 --json ../../evidence/dual-oai-vial-emulator.json --deadline-ms 30000"
     },
     "dependencies": {
         "rp2040js": "1.3.3"

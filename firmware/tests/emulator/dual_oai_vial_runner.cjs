@@ -206,7 +206,7 @@ function reportDescriptorSetup(interfaceNumber, reportLength) {
 }
 
 function routeFrame(frame, channels) {
-  if (frame.length === channels.vial.inBytes && (frame[0] === 0x01 || frame[0] === 0x04 || frame[0] === 0x05)) return 'vial';
+  if (frame.length === channels.vial.inBytes && [0x01, 0x04, 0x05, 0x0c, 0x0d, 0xfe].includes(frame[0])) return 'vial';
   if (frame.length === channels.oai.inBytes && frame[0] === OAI_REPORT_ID && frame[1] === 2) return 'oai';
   return null;
 }
@@ -577,6 +577,37 @@ function main() {
     if (command === 0x04) { request[1] = 0; request[2] = 0; request[3] = 0; }
     sendFrame(vial, request);
   };
+  const vialRequest = (request, responsePredicate) => {
+    const before = vialFrames().length;
+    sendFrame(vial, request);
+    runForMicros(250000);
+    return vialFrames().slice(before).find((frame) =>
+      frame.length === VIAL_REPORT_BYTES && responsePredicate(frame)
+    ) || null;
+  };
+  const vialEncoderMap = () => {
+    const request = Buffer.alloc(VIAL_REPORT_BYTES);
+    request[0] = 0xfe; // Vial prefix
+    request[1] = 0x03; // vial_get_encoder
+    request[2] = 0; // layer 0
+    request[3] = 0; // encoder 0
+    const response = vialRequest(request, (frame) => frame[0] !== 0xfe);
+    return response ? {
+      ccw: (response[0] << 8) | response[1],
+      clockwise: (response[2] << 8) | response[3],
+    } : null;
+  };
+  const setVialEncoderKeycode = (direction, keycode) => {
+    const request = Buffer.alloc(VIAL_REPORT_BYTES);
+    request[0] = 0xfe; // Vial prefix
+    request[1] = 0x04; // vial_set_encoder
+    request[2] = 0; // layer 0
+    request[3] = 0; // encoder 0
+    request[4] = direction;
+    request[5] = keycode >> 8;
+    request[6] = keycode & 0xff;
+    return vialRequest(request, (frame) => frame[0] === 0xfe && frame[1] === 0x04);
+  };
   const rpc = (json, ack) => {
     const before = oaiFrames().length;
     const reports = oaiReports(json);
@@ -611,6 +642,49 @@ function main() {
   mcu.gpio[12].setInputValue(true);
   runForMicros(150000);
   const keyFrame = readOaiMessages(oaiFrames().slice(beforeKey)).find((json) => json === '{"method":"v.oai.hid","params":{"k":"AG00","act":1}}\r\n');
+
+  const encoderMapBefore = vialEncoderMap();
+  const encoderStates = [
+    [[true, true], [false, true], [false, false], [true, false], [true, true]],
+    [[true, true], [true, false], [false, false], [false, true], [true, true]],
+  ];
+  const rotateEncoder = (states) => {
+    const beforeOai = oaiFrames().length;
+    const beforeKeyboard = (captures.get(keyboard.inEp) || []).length;
+    for (const [a, b] of states) {
+      mcu.gpio[13].setInputValue(a);
+      mcu.gpio[14].setInputValue(b);
+      runForMicros(50000);
+    }
+    return {
+      oaiMessages: readOaiMessages(oaiFrames().slice(beforeOai)),
+      keyboardFrames: (captures.get(keyboard.inEp) || []).slice(beforeKeyboard),
+    };
+  };
+  let clockwiseStates = encoderStates[0];
+  let clockwiseRotation = rotateEncoder(clockwiseStates);
+  if (!clockwiseRotation.oaiMessages.some((message) => message.includes('"k":"ENC_CW"'))) {
+    clockwiseStates = encoderStates[1];
+    clockwiseRotation = rotateEncoder(clockwiseStates);
+  }
+  const dynamicEncoderKeycode = 0x52; // KC_UP
+  const encoderWrite = setVialEncoderKeycode(1, dynamicEncoderKeycode);
+  const encoderMapAfter = vialEncoderMap();
+  const rotationAfterMapWrite = rotateEncoder(clockwiseStates);
+  const rotationKeyboardFrames = rotationAfterMapWrite.keyboardFrames.filter(
+    (frame) => frame.length === 9 && frame[0] === 1
+  );
+  const encoderRotationBehavior = {
+    initial_map_readback_verified: encoderMapBefore.ccw !== null && encoderMapBefore.clockwise !== null,
+    initial_rotation_emitted_oai_event: clockwiseRotation.oaiMessages.some((message) => message.includes('"k":"ENC_CW"')),
+    initial_rotation_event: clockwiseRotation.oaiMessages.find((message) => message.includes('"k":"ENC_')) || null,
+    dynamic_map_write_ack: encoderWrite !== null,
+    initial_map_readback: encoderMapBefore,
+    programmed_clockwise_keycode: dynamicEncoderKeycode,
+    map_readback_after_write: encoderMapAfter ? encoderMapAfter.clockwise : null,
+    rotation_after_map_write_seen: rotationKeyboardFrames.length > 0,
+    rotation_used_programmed_keycode: rotationKeyboardFrames.some((frame) => frame.includes(dynamicEncoderKeycode)),
+  };
   const beforeKeyboardKey = (captures.get(keyboard.inEp) || []).length;
   // Rebind K00 through the live Vial dynamic-keymap path, then press SW1.
   // This produces a genuine boot-keyboard report while retaining the OAI AG00
@@ -698,6 +772,7 @@ function main() {
     keyboard_hid_enumerated: Boolean(keyboard && keyboardReports.length > 0),
     keyboard_report_behavior: keyboardReportBehavior,
     joystick_report_behavior: joystickReportBehavior,
+    encoder_rotation_behavior: encoderRotationBehavior,
     shared_keyboard_joystick_endpoint: {
       keyboard_endpoint: keyboard.inEp,
       joystick_endpoint: keyboard.inEp,
@@ -729,7 +804,7 @@ function main() {
     'oai_hid_enumerated', 'vial_protocol_ack', 'vial_default_k00',
     'rgbcfg_ack', 'thstatus_ack', 'device_status_ack',
     'task_status_fragment_count', 'key_event', 'manufacturer', 'product',
-    'ws2812_activity', 'channels_isolated',
+    'ws2812_activity', 'channels_isolated', 'encoder_rotation_behavior',
   ];
   const checks = [
     evidence.vid_pid === '303a:8360', evidence.report_descriptors_verified,
@@ -739,6 +814,12 @@ function main() {
     evidence.task_status_fragment_count > 1, evidence.key_event !== null,
     evidence.device_identity.manufacturer === 'hirlu', evidence.device_identity.product === 'Codex Micro Lab OAI LED',
     evidence.ws2812_activity, evidence.channels_isolated,
+    evidence.encoder_rotation_behavior.initial_map_readback_verified &&
+      evidence.encoder_rotation_behavior.initial_rotation_emitted_oai_event &&
+      evidence.encoder_rotation_behavior.dynamic_map_write_ack &&
+      evidence.encoder_rotation_behavior.map_readback_after_write === dynamicEncoderKeycode &&
+      evidence.encoder_rotation_behavior.rotation_after_map_write_seen &&
+      evidence.encoder_rotation_behavior.rotation_used_programmed_keycode,
   ];
   const failedChecks = checkNames.filter((_name, index) => !checks[index]);
   if (failedChecks.length) {
@@ -747,7 +828,8 @@ function main() {
       .join(',');
     throw new Error(
       `dual OAI/Vial smoke failed; evidence was not published (${failedChecks.join(', ')}; ` +
-      `keyboard_in_bytes=${keyboard.inBytes}; keyboard_frames=${keyboardFrameSummary || 'none'})`
+      `keyboard_in_bytes=${keyboard.inBytes}; keyboard_frames=${keyboardFrameSummary || 'none'}; ` +
+      `encoder=${JSON.stringify(encoderRotationBehavior)})`
     );
   }
   activeDeadline.check();

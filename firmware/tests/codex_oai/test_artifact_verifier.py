@@ -26,6 +26,10 @@ def make_usb_string_descriptor(value: str) -> bytes:
     return bytes((len(payload) + 2, 3)) + payload
 
 
+def make_usb_language_descriptor() -> bytes:
+    return bytes((4, 3, 0x09, 0x04))
+
+
 def make_usb_device_descriptor(
     *, vid: int = 0x303A, pid: int = 0x8360, manufacturer_index: int = 1,
     product_index: int = 2, serial_index: int = 3,
@@ -65,6 +69,7 @@ def make_dual_usb_descriptor_fixture(
     vial_in_endpoint: int = 0x81,
     oai_out_endpoint: int = 0x04,
     oai_in_endpoint: int = 0x83,
+    endpoint_transfer_type: int = 3,
 ) -> bytes:
     """Return a compact ELF-derived image with the complete dual HID contract."""
     if oai_interface_number is None:
@@ -89,19 +94,19 @@ def make_dual_usb_descriptor_fixture(
     keyboard = (
         bytes((9, 4, 0, 0, 1, 3, 1, 1, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, 0x22, 0, 0)),
-        bytes((7, 5, keyboard_in_endpoint, 3, 8, 0, 10)),
+        bytes((7, 5, keyboard_in_endpoint, endpoint_transfer_type, 8, 0, 10)),
     )
     vial = (
         bytes((9, 4, vial_interface_number, vial_alternate_setting, 2, 3, 0, 0, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, vial_hid_report_type, len(vial_report), 0)),
-        bytes((7, 5, vial_out_endpoint, 3, 32, 0, 1)),
-        bytes((7, 5, vial_in_endpoint, 3, 32, 0, 1)),
+        bytes((7, 5, vial_out_endpoint, endpoint_transfer_type, 32, 0, 1)),
+        bytes((7, 5, vial_in_endpoint, endpoint_transfer_type, 32, 0, 1)),
     )
     oai = (
         bytes((9, 4, oai_interface_number, oai_alternate_setting, 2, 3, 0, 0, 0)),
         bytes((9, 0x21, 0x11, 0x01, 0, 1, oai_hid_report_type, len(oai_report), 0)),
-        bytes((7, 5, oai_out_endpoint, 3, 64, 0, 1)),
-        bytes((7, 5, oai_in_endpoint, 3, 64, 0, 1)),
+        bytes((7, 5, oai_out_endpoint, endpoint_transfer_type, 64, 0, 1)),
+        bytes((7, 5, oai_in_endpoint, endpoint_transfer_type, 64, 0, 1)),
     )
     descriptors = list(keyboard)
     raw_descriptors = []
@@ -195,6 +200,7 @@ class ArtifactVerifierTest(unittest.TestCase):
             bytes(range(256))
             + make_usb_device_descriptor()
             + make_dual_usb_descriptor_fixture()
+            + make_usb_language_descriptor()
             + make_usb_string_descriptor("hirlu")
             + make_usb_string_descriptor("Codex Micro Lab OAI LED")
             + b"agentpad13 dual oai fixture\n"
@@ -281,6 +287,15 @@ class ArtifactVerifierTest(unittest.TestCase):
             },
             "joystick_report_behavior": {
                 "report_id": 7, "report_count": 2, "axes_swung": True,
+            },
+            "encoder_rotation_behavior": {
+                "initial_map_readback_verified": True,
+                "initial_rotation_emitted_oai_event": True,
+                "dynamic_map_write_ack": True,
+                "programmed_clockwise_keycode": 0x52,
+                "map_readback_after_write": 0x52,
+                "rotation_after_map_write_seen": True,
+                "rotation_used_programmed_keycode": True,
             },
             "shared_keyboard_joystick_endpoint": {
                 "keyboard_endpoint": 5, "joystick_endpoint": 5,
@@ -415,6 +430,10 @@ class ArtifactVerifierTest(unittest.TestCase):
         self.assertIn("keyboard_report_behavior", result["emulator_evidence"])
         self.assertIn("joystick_report_behavior", result["emulator_evidence"])
         self.assertEqual(
+            result["emulator_evidence"]["encoder_rotation_behavior"]["map_readback_after_write"],
+            0x52,
+        )
+        self.assertEqual(
             result["emulator_evidence"]["shared_keyboard_joystick_endpoint"],
             {"keyboard_endpoint": 5, "joystick_endpoint": 5},
         )
@@ -427,6 +446,12 @@ class ArtifactVerifierTest(unittest.TestCase):
         self.assertTrue(emulator["config_descriptor_recovery_used"])
         self.assertFalse(emulator["configuration_descriptor_verified"])
         self.assertFalse(emulator["descriptor_verified"])
+
+    def test_dual_evidence_requires_runtime_encoder_map_and_rotation_proof(self) -> None:
+        evidence = {**self.good_dual_evidence}
+        evidence.pop("encoder_rotation_behavior")
+        with self.assertRaisesRegex(self.verifier.VerificationError, "encoder"):
+            self._verify(evidence=evidence, profile="dual")
 
         for field, value in (("report_descriptors_verified", False), ("descriptor_verified", True)):
             with self.subTest(field=field):
@@ -532,8 +557,30 @@ class ArtifactVerifierTest(unittest.TestCase):
                     + make_dual_usb_descriptor_fixture()
                     + identity
                 )
-                with self.assertRaisesRegex(self.verifier.VerificationError, "device|manufacturer|product"):
+                with self.assertRaisesRegex(self.verifier.VerificationError, "device|string|manufacturer|product"):
                     self.verifier.verify_device_identity(fixture, self.verifier.DUAL_PROFILE)
+
+    def test_dual_artifact_identity_resolves_device_string_indices(self) -> None:
+        fixture = (
+            bytes(range(256))
+            + make_dual_usb_descriptor_fixture()
+            + make_usb_device_descriptor(manufacturer_index=1, product_index=2)
+            + make_usb_language_descriptor()
+            + make_usb_string_descriptor("wrong manufacturer")
+            + make_usb_string_descriptor("wrong product")
+            + make_usb_string_descriptor("hirlu")
+            + make_usb_string_descriptor("Codex Micro Lab OAI LED")
+        )
+        with self.assertRaisesRegex(self.verifier.VerificationError, "manufacturer|product|index"):
+            self.verifier.verify_device_identity(fixture, self.verifier.DUAL_PROFILE)
+
+    def test_dual_static_descriptor_contract_rejects_bulk_endpoints(self) -> None:
+        fixture = make_dual_usb_descriptor_fixture(endpoint_transfer_type=2)
+        with mock.patch.object(self.verifier, "elf_binary", return_value=fixture):
+            with self.assertRaisesRegex(self.verifier.VerificationError, "USB descriptor"):
+                self.verifier.verify_usb_descriptor_contract(
+                    self.good_elf, self.verifier.DUAL_PROFILE
+                )
 
     def test_dual_static_descriptor_contract_rejects_ambiguous_or_mistyped_hid_reports(self) -> None:
         cases = (

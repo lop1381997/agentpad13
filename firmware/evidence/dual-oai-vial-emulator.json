@@ -50,14 +50,14 @@
   "keyboard_hid_enumerated": true,
   "keyboard_report_behavior": {
     "report_bytes": 8,
-    "report_count": 2,
+    "report_count": 4,
     "reports_after_key": 2,
     "press_seen": true,
     "release_seen": true
   },
   "joystick_report_behavior": {
     "report_id": 7,
-    "report_count": 3,
+    "report_count": 2,
     "axes_a": [
       -486,
       488
@@ -67,6 +67,20 @@
       -486
     ],
     "axes_swung": true
+  },
+  "encoder_rotation_behavior": {
+    "initial_map_readback_verified": true,
+    "initial_rotation_emitted_oai_event": true,
+    "initial_rotation_event": "{\"method\":\"v.oai.hid\",\"params\":{\"k\":\"ENC_CW\",\"act\":2}}\r\n",
+    "dynamic_map_write_ack": true,
+    "initial_map_readback": {
+      "ccw": 32274,
+      "clockwise": 32273
+    },
+    "programmed_clockwise_keycode": 82,
+    "map_readback_after_write": 82,
+    "rotation_after_map_write_seen": true,
+    "rotation_used_programmed_keycode": true
   },
   "shared_keyboard_joystick_endpoint": {
     "keyboard_endpoint": 5,
@@ -109,11 +123,19 @@
     "[1390.2ms] oai IN 64B",
     "[1910.2ms] oai IN 64B",
     "[2184.3ms] oai IN 64B",
-    "[2480.3ms] vial IN 32B",
-    "[2734.3ms] hid0 IN 9B",
-    "[2884.3ms] hid0 IN 9B",
-    "[3030.0ms] hid0 IN 5B",
-    "[3030.1ms] hid0 IN 5B",
-    "[3730.0ms] hid0 IN 5B"
+    "[2480.1ms] vial IN 32B",
+    "[2930.1ms] oai IN 64B",
+    "[2930.2ms] oai IN 64B",
+    "[3180.1ms] oai IN 64B",
+    "[3180.2ms] oai IN 64B",
+    "[3230.5ms] vial IN 32B",
+    "[3480.1ms] vial IN 32B",
+    "[3930.1ms] hid0 IN 9B",
+    "[3930.2ms] hid0 IN 9B",
+    "[3980.3ms] vial IN 32B",
+    "[4234.3ms] hid0 IN 9B",
+    "[4384.3ms] hid0 IN 9B",
+    "[4530.1ms] hid0 IN 5B",
+    "[5230.0ms] hid0 IN 5B"
   ]
 }

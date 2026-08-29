@@ -442,6 +442,17 @@ if (!runner.hasValidatedDualConfigPrefix(prefix) || runner.hasValidatedDualConfi
             evidence["uf2_sha256"], hashlib.sha256(DUAL_OAI_VIAL_UF2.read_bytes()).hexdigest()
         )
 
+    def test_dual_emulator_proves_vial_dynamic_encoder_map_at_runtime(self) -> None:
+        evidence = run_dual_oai_vial_emulator(DUAL_OAI_VIAL_UF2)
+        encoder = evidence["encoder_rotation_behavior"]
+        self.assertTrue(encoder["initial_map_readback_verified"])
+        self.assertTrue(encoder["initial_rotation_emitted_oai_event"])
+        self.assertTrue(encoder["dynamic_map_write_ack"])
+        self.assertEqual(encoder["programmed_clockwise_keycode"], 0x52)
+        self.assertEqual(encoder["map_readback_after_write"], 0x52)
+        self.assertTrue(encoder["rotation_after_map_write_seen"])
+        self.assertTrue(encoder["rotation_used_programmed_keycode"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -62,7 +62,7 @@ class Phase3ReleaseContractTest(unittest.TestCase):
         self.assertEqual(
             package["scripts"].get("smoke:dual-oai-vial"),
             "node dual_oai_vial_watchdog.cjs ../../../release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2 "
-            "--json ../../evidence/dual-oai-vial-emulator.json --deadline-ms 20000",
+            "--json ../../evidence/dual-oai-vial-emulator.json --deadline-ms 30000",
         )
 
     def test_default_and_vial_smokes_preserve_protocol_v1_release_contract(self) -> None:
