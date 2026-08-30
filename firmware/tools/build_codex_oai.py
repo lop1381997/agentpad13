@@ -40,9 +40,11 @@ DUAL_OAI_VIAL_DEFINITION = REPO_ROOT / "release" / "firmware" / "prebuilt" / "ag
 VIA_COMMAND_PATCH = REPO_ROOT / "firmware" / "patches" / "0001-via-command-kb-backport.patch"
 OAI_DESCRIPTOR_PATCH = REPO_ROOT / "firmware" / "patches" / "0002-raw-hid-report-id-chibios.patch"
 DUAL_RAW_HID_PATCH = REPO_ROOT / "firmware" / "patches" / "0003-dual-raw-hid-chibios.patch"
+DETERMINISTIC_BUILD_ID_PATCH = REPO_ROOT / "firmware" / "patches" / "0004-deterministic-vial-build-id.patch"
 VIA_COMMAND_PATCH_SHA256 = "b12c375f7de6361fb2b26ecd003b0ffd717fb54d1441f37574866c86f473268c"
 OAI_DESCRIPTOR_PATCH_SHA256 = "48eb5211383c8aa338e5b266b34cb3a90fc97cccc5586754f35d54a7bfdac002"
 DUAL_RAW_HID_PATCH_SHA256 = "ab1d1f51d34c95cc40d0e9f5a2df46089dc02304500f3cc50958db3c31874ccb"
+DETERMINISTIC_BUILD_ID_PATCH_SHA256 = "9b28d2b484b3536fe9c9bbb95ae7acbcebf566fedf99cb5a732cbcc62d333beb"
 QMK_PATCHED_FILE_SHA256 = {
     "quantum/via.c": "48291b5dceb67de7daf7caad9db5399c69f463485203476ae4586814f3ad46f5",
     "quantum/via.h": "0a8ef108af7114bbc1da252f2017d7a9dc502750e6d75bd6506e1513ef226e7d",
@@ -67,10 +69,17 @@ QMK_DUAL_RAW_HID_PATCHED_SHA256 = {
     "tmk_core/protocol/chibios/usb_endpoints.h": "df744207eac81e21e17171caaa0a00cd203f58c7f0a66d811ba01fa87331f72a",
     "tmk_core/protocol/chibios/usb_main.c": "682fd218db2adbdbb67f63a224ec8a52352a6984f4b949365ea73986de215e61",
 }
+QMK_DETERMINISTIC_BUILD_ID_SHA256 = {
+    "util/build_id.py": "5a44c90d723b07a45a54a4c7d6e60ba33fa236e93c6a3c0f322c3b4f0a4b7f90",
+}
 PINNED_GCC_VERSION = (
     "arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) "
     "15.2.1 20251203"
 )
+# QMK otherwise embeds the wall-clock build date in version.h.  Vial uses that
+# value in its EEPROM magic, so pin all generated version metadata as well.
+REPRODUCIBLE_VERSION_H_FLAGS = "--skip-all"
+REPRODUCIBLE_QMK_BUILD_ID = "0xA13D13"
 
 
 class BuildError(RuntimeError):
@@ -114,14 +123,16 @@ def _verify_file_sha256(path: Path, expected: str, *, label: str) -> None:
 
 
 def validate_qmk_state(status: str, file_digests: Mapping[str, str]) -> str:
-    """Accept only the exact repository-owned 0001, 0001+0002, or 0001+0002+0003 states."""
+    """Accept only the exact repository-owned QMK patch states."""
     patch1_paths = frozenset(QMK_PATCHED_FILE_SHA256)
     patch2_paths = frozenset(QMK_DESCRIPTOR_PATCHED_SHA256)
     patch3_paths = frozenset(QMK_DUAL_RAW_HID_PATCHED_SHA256)
+    patch4_paths = frozenset(QMK_DETERMINISTIC_BUILD_ID_SHA256)
     actual_status = frozenset(line for line in status.splitlines() if line)
     patch1_status = frozenset(f" M {path}" for path in patch1_paths)
     patch12_status = patch1_status | frozenset(f" M {path}" for path in patch2_paths)
     patch123_status = patch12_status | frozenset(f" M {path}" for path in patch3_paths)
+    patch1234_status = patch123_status | frozenset(f" M {path}" for path in patch4_paths)
     if actual_status == patch1_status:
         expected_digests = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
         state = "patch-0001"
@@ -135,8 +146,16 @@ def validate_qmk_state(status: str, file_digests: Mapping[str, str]) -> str:
             | QMK_DUAL_RAW_HID_PATCHED_SHA256
         )
         state = "patch-0001+patch-0002+patch-0003"
+    elif actual_status == patch1234_status:
+        expected_digests = (
+            QMK_PATCHED_FILE_SHA256
+            | QMK_DESCRIPTOR_PATCHED_SHA256
+            | QMK_DUAL_RAW_HID_PATCHED_SHA256
+            | QMK_DETERMINISTIC_BUILD_ID_SHA256
+        )
+        state = "patch-0001+patch-0002+patch-0003+patch-0004"
     else:
-        unexpected = ", ".join(sorted(actual_status ^ patch123_status)) or "unknown state"
+        unexpected = ", ".join(sorted(actual_status ^ patch1234_status)) or "unknown state"
         raise BuildError(f"unexpected QMK modification set: {unexpected}")
 
     for path, expected in expected_digests.items():
@@ -170,6 +189,9 @@ def verify_qmk_source_state(qmk_home: Path) -> str:
     patch1_status = frozenset(f" M {path}" for path in QMK_PATCHED_FILE_SHA256)
     patch12_status = patch1_status | frozenset(f" M {path}" for path in QMK_DESCRIPTOR_PATCHED_SHA256)
     patch123_status = patch12_status | frozenset(f" M {path}" for path in QMK_DUAL_RAW_HID_PATCHED_SHA256)
+    patch1234_status = patch123_status | frozenset(
+        f" M {path}" for path in QMK_DETERMINISTIC_BUILD_ID_SHA256
+    )
     if actual_status == patch1_status:
         paths = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
     elif actual_status == patch12_status:
@@ -179,6 +201,13 @@ def verify_qmk_source_state(qmk_home: Path) -> str:
             QMK_PATCHED_FILE_SHA256
             | QMK_DESCRIPTOR_PATCHED_SHA256
             | QMK_DUAL_RAW_HID_PATCHED_SHA256
+        )
+    elif actual_status == patch1234_status:
+        paths = (
+            QMK_PATCHED_FILE_SHA256
+            | QMK_DESCRIPTOR_PATCHED_SHA256
+            | QMK_DUAL_RAW_HID_PATCHED_SHA256
+            | QMK_DETERMINISTIC_BUILD_ID_SHA256
         )
     else:
         paths = (
@@ -295,15 +324,29 @@ def _apply_or_verify_patch(qmk_home: Path, patch: Path, expected_sha256: str, *,
 
 def apply_qmk_patches(qmk_home: Path) -> None:
     """Apply or verify repository patches in their required dependency order."""
-    _apply_or_verify_patch(
-        qmk_home, VIA_COMMAND_PATCH, VIA_COMMAND_PATCH_SHA256, label="repository patch 0001"
+    state = verify_qmk_source_state(qmk_home)
+    # Patch 0003 intentionally extends files patched by 0002.  Apply only the
+    # missing suffix after validating the exact starting state; reversing 0002
+    # in isolation is no longer meaningful once patch 0003 is present.
+    if state == "patch-0001+patch-0002+patch-0003+patch-0004":
+        return
+    patches = (
+        ("patch-0001", OAI_DESCRIPTOR_PATCH, OAI_DESCRIPTOR_PATCH_SHA256, "repository patch 0002"),
+        ("patch-0001+patch-0002", DUAL_RAW_HID_PATCH, DUAL_RAW_HID_PATCH_SHA256, "repository patch 0003"),
+        (
+            "patch-0001+patch-0002+patch-0003",
+            DETERMINISTIC_BUILD_ID_PATCH,
+            DETERMINISTIC_BUILD_ID_PATCH_SHA256,
+            "repository patch 0004",
+        ),
     )
-    _apply_or_verify_patch(
-        qmk_home, OAI_DESCRIPTOR_PATCH, OAI_DESCRIPTOR_PATCH_SHA256, label="repository patch 0002"
-    )
-    _apply_or_verify_patch(
-        qmk_home, DUAL_RAW_HID_PATCH, DUAL_RAW_HID_PATCH_SHA256, label="repository patch 0003"
-    )
+    expected_states = tuple(item[0] for item in patches)
+    try:
+        first_missing = expected_states.index(state)
+    except ValueError as exc:
+        raise BuildError(f"unexpected verified QMK patch state: {state}") from exc
+    for _before_state, patch, digest, label in patches[first_missing:]:
+        _apply_or_verify_patch(qmk_home, patch, digest, label=label)
 
 
 def apply_oai_descriptor_patch(qmk_home: Path, patch: Path = OAI_DESCRIPTOR_PATCH) -> None:
@@ -390,6 +433,8 @@ def find_cross_compiler() -> str:
 def _qmk_environment(qmk_home: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["QMK_HOME"] = str(qmk_home)
+    env["VERSION_H_FLAGS"] = REPRODUCIBLE_VERSION_H_FLAGS
+    env["QMK_BUILD_ID"] = REPRODUCIBLE_QMK_BUILD_ID
     return env
 
 

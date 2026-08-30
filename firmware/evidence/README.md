@@ -17,7 +17,9 @@ endpoint fields describe rp2040js transport recovery only; they are never
 configuration-descriptor proof. That proof is recorded by the ELF-derived
 static verifier in `dual-oai-vial-current-manifest.json`.
 The current dual rebuild is 123,904 bytes with SHA-256
-`ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c`.
+`c071ec6f6286eff69785acf12c27a55c6e2c55392a276768514ecd69cf5ea4b0`.
+Its generated version metadata and Vial build ID are fixed by the verified
+builder, and two clean builds produced this exact artifact.
 Its verifier manifest is `dual-oai-vial-current-manifest.json`.
 
 `vial-oai-emulator.json` is the historical capture for

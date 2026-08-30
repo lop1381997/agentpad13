@@ -1,0 +1,25 @@
+diff --git a/util/build_id.py b/util/build_id.py
+index 77e56b5938..d25ccac268 100644
+--- a/util/build_id.py
++++ b/util/build_id.py
+@@ -1,8 +1,19 @@
++import os
+ import random
+ 
+ 
++def build_id():
++    configured = os.environ.get("QMK_BUILD_ID")
++    if configured is None:
++        return random.randrange(0, 2 ** 24 - 1)
++    value = int(configured, 0)
++    if not 0 <= value < 2 ** 24:
++        raise ValueError("QMK_BUILD_ID must fit in 24 bits")
++    return value
++
++
+ def main():
+-    print("#define BUILD_ID ((uint32_t)0x{:08X})".format(random.randrange(0, 2 ** 24 - 1)))
++    print("#define BUILD_ID ((uint32_t)0x{:08X})".format(build_id()))
+ 
+ 
+ if __name__ == "__main__":

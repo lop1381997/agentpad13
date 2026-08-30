@@ -106,11 +106,19 @@ class BuildToolSafetyTest(unittest.TestCase):
         for fragment in required:
             self.assertIn(fragment, patch_text)
 
-    def test_qmk_state_accepts_exact_three_patch_state(self) -> None:
+    def test_deterministic_build_id_patch_is_repository_owned_and_complete(self) -> None:
+        patch = REPO / "firmware" / "patches" / "0004-deterministic-vial-build-id.patch"
+        self.assertTrue(patch.is_file())
+        patch_text = patch.read_text(encoding="utf-8")
+        for fragment in ("util/build_id.py", "QMK_BUILD_ID", "int(configured, 0)"):
+            self.assertIn(fragment, patch_text)
+
+    def test_qmk_state_accepts_exact_four_patch_state(self) -> None:
         patch_paths = (
             *builder.QMK_PATCHED_FILE_SHA256,
             *builder.QMK_DESCRIPTOR_PATCHED_SHA256,
             *builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+            *builder.QMK_DETERMINISTIC_BUILD_ID_SHA256,
         )
         status = "".join(f" M {path}\n" for path in patch_paths)
         digests = {
@@ -119,16 +127,21 @@ class BuildToolSafetyTest(unittest.TestCase):
                 builder.QMK_PATCHED_FILE_SHA256,
                 builder.QMK_DESCRIPTOR_PATCHED_SHA256,
                 builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+                builder.QMK_DETERMINISTIC_BUILD_ID_SHA256,
             )
             for path, digest in inventory.items()
         }
-        self.assertEqual(builder.validate_qmk_state(status, digests), "patch-0001+patch-0002+patch-0003")
+        self.assertEqual(
+            builder.validate_qmk_state(status, digests),
+            "patch-0001+patch-0002+patch-0003+patch-0004",
+        )
 
-    def test_qmk_state_rejects_unlisted_changed_file_in_three_patch_state(self) -> None:
+    def test_qmk_state_rejects_unlisted_changed_file_in_four_patch_state(self) -> None:
         patch_paths = (
             *builder.QMK_PATCHED_FILE_SHA256,
             *builder.QMK_DESCRIPTOR_PATCHED_SHA256,
             *builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+            *builder.QMK_DETERMINISTIC_BUILD_ID_SHA256,
         )
         status = "".join(f" M {path}\n" for path in patch_paths) + " M quantum/unlisted.c\n"
         digests = {
@@ -137,30 +150,55 @@ class BuildToolSafetyTest(unittest.TestCase):
                 builder.QMK_PATCHED_FILE_SHA256,
                 builder.QMK_DESCRIPTOR_PATCHED_SHA256,
                 builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+                builder.QMK_DETERMINISTIC_BUILD_ID_SHA256,
             )
             for path, digest in inventory.items()
         }
         with self.assertRaisesRegex(BuildError, "unexpected QMK modification"):
             builder.validate_qmk_state(status, digests)
 
-    def test_builder_applies_repository_patches_in_order(self) -> None:
+    def test_builder_applies_remaining_repository_patches_in_order(self) -> None:
         patch_paths = (
-            builder.VIA_COMMAND_PATCH,
-            builder.OAI_DESCRIPTOR_PATCH,
             builder.DUAL_RAW_HID_PATCH,
+            builder.DETERMINISTIC_BUILD_ID_PATCH,
         )
-        apply_checks = iter((True, True, True))
+        apply_checks = iter((True, True))
         applied: list[Path] = []
 
         def fake_apply(*args, **_kwargs):
             applied.append(Path(args[0][-1]))
 
-        with mock.patch.object(builder, "_git_apply_check", side_effect=lambda *_args, **_kwargs: next(apply_checks)), mock.patch.object(
+        with mock.patch.object(builder, "verify_qmk_source_state", return_value="patch-0001+patch-0002"), mock.patch.object(
+            builder, "_git_apply_check", side_effect=lambda *_args, **_kwargs: next(apply_checks)
+        ), mock.patch.object(
             builder, "_run", side_effect=fake_apply
         ):
             apply_qmk_patches(self.fake_qmk)
 
         self.assertEqual(applied, list(patch_paths))
+
+    def test_builder_applies_only_deterministic_patch_for_verified_three_patch_state(self) -> None:
+        with mock.patch.object(
+            builder, "verify_qmk_source_state", return_value="patch-0001+patch-0002+patch-0003"
+        ), mock.patch.object(builder, "_git_apply_check", return_value=True), mock.patch.object(
+            builder, "_run"
+        ) as runner:
+            apply_qmk_patches(self.fake_qmk)
+
+        runner.assert_called_once_with(
+            ("git", "-C", str(self.fake_qmk), "apply", str(builder.DETERMINISTIC_BUILD_ID_PATCH)),
+            cwd=self.fake_qmk,
+        )
+
+    def test_builder_skips_patch_reapplication_for_verified_four_patch_state(self) -> None:
+        with mock.patch.object(
+            builder, "verify_qmk_source_state", return_value="patch-0001+patch-0002+patch-0003+patch-0004"
+        ) as verify, mock.patch.object(
+            builder, "_git_apply_check", side_effect=AssertionError("must not re-check an already verified patch set")
+        ):
+            apply_qmk_patches(self.fake_qmk)
+
+        verify.assert_called_once_with(self.fake_qmk)
 
     def test_dual_capability_gate_rejects_missing_oai_endpoint(self) -> None:
         required = (
@@ -374,23 +412,30 @@ class BuildToolSafetyTest(unittest.TestCase):
         apply_oai_descriptor_patch(self.fake_qmk)
         verify_oai_descriptor_support(self.fake_qmk)
 
-    def test_clean_runs_real_clean_target_before_build(self) -> None:
+    def test_clean_runs_real_clean_target_with_stable_qmk_version_metadata(self) -> None:
         artifact = self.fake_qmk / "loudest_micro_codex_oai.uf2"
-        calls: list[tuple[str, ...]] = []
+        calls: list[tuple[tuple[str, ...], dict[str, str] | None]] = []
 
         def fake_run(command, **_kwargs):
-            calls.append(tuple(command))
+            calls.append((tuple(command), _kwargs.get("env")))
             if command[-1] == "loudest_micro:codex_oai":
                 artifact.write_bytes(b"uf2")
 
         with mock.patch.object(builder, "_run", side_effect=fake_run):
             self.assertEqual(run_build(self.fake_qmk, "codex_oai", clean=True), artifact)
         self.assertEqual(
-            calls,
+            [command for command, _env in calls],
             [
                 ("make", "-f", "Makefile", "clean"),
                 ("make", "-f", "Makefile", "loudest_micro:codex_oai"),
             ],
+        )
+        self.assertTrue(all(env is not None for _command, env in calls))
+        self.assertTrue(
+            all(env["VERSION_H_FLAGS"] == "--skip-all" for _command, env in calls if env)
+        )
+        self.assertTrue(
+            all(env["QMK_BUILD_ID"] == "0xA13D13" for _command, env in calls if env)
         )
 
     def test_compiler_preflight_rejects_missing_binutils(self) -> None:

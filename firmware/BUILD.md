@@ -156,7 +156,7 @@ Recorded results and the emulator-fidelity caveats are in
 
 The current Task-5 candidate is
 `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 123,904 bytes, SHA-256
-`ca57bdb4f85ba8e65f80e6f45b3cf8fce7dfbbb894793be45398868353d9ed1c`.
+`c071ec6f6286eff69785acf12c27a55c6e2c55392a276768514ecd69cf5ea4b0`.
 Its paired Vial definition is
 `release/firmware/prebuilt/agentpad13_oai_vial_dual.vial`. It keeps the Direct
 OAI identity and wire contract (`303A:8360`, `FF00:61`, Report ID 6, 64-byte
@@ -168,6 +168,10 @@ readback/write/rotation behavior and LED/event behavior pass in the recorded
 offline evidence. The emulator’s
 truncated configuration recovery is explicitly synthetic and never counts as
 configuration-descriptor proof; the ELF-derived static verifier is authoritative.
+The candidate is byte-reproducible: two clean builds with the pinned compiler
+produced this same SHA-256. The builder fixes QMK's generated version metadata
+and Vial `BUILD_ID` for this target, so the result does not depend on a clock
+or random build identifier.
 Physical validation is pending; use
 `docs/dual-oai-vial-physical-runbook.md` for the gated manual procedure.
 
@@ -210,10 +214,11 @@ configuration route. The normal recommended firmware remains
 The repository builder requires exact Vial-QMK commit
 `00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb`, initialized recursive submodules,
 and Arm GNU Toolchain 15.2.Rel1 (gcc 15.2.1). It verifies the repository-owned
-`patches/0001-via-command-kb-backport.patch`, applies or verifies
-`patches/0002-raw-hid-report-id-chibios.patch`, checks their pinned digests, stages
-the keyboard through a temporary link, builds `default`, `vial`, `codex_oai`,
-and `vial_oai`, and atomically publishes both OAI UF2s:
+patches `0001` through `0004` against pinned digests, stages the keyboard
+through a temporary link, builds `default`, `vial`, `codex_oai`, and
+`vial_oai`, and atomically publishes both OAI UF2s. Patch `0004` accepts the
+builder's fixed Vial `BUILD_ID`; paired with QMK's fixed `version.h` metadata,
+this makes the combined artifact reproducible:
 
 ```sh
 python3 firmware/tools/build_codex_oai.py \
