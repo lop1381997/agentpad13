@@ -962,6 +962,7 @@ def verify_evidence(
         required_encoder_fields = (
             "initial_map_readback_verified",
             "initial_rotation_emitted_oai_event",
+            "initial_rotation_emitted_exactly_one_oai_event",
             "dynamic_map_write_ack",
             "rotation_after_map_write_seen",
             "rotation_used_programmed_keycode",

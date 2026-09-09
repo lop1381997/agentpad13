@@ -667,6 +667,8 @@ function main() {
     clockwiseStates = encoderStates[1];
     clockwiseRotation = rotateEncoder(clockwiseStates);
   }
+  const expectedClockwiseOaiEvent = '{"method":"v.oai.hid","params":{"k":"ENC_CW","act":2}}\r\n';
+  const initialRotationOaiEvents = clockwiseRotation.oaiMessages.filter((message) => message.includes('"k":"ENC_'));
   const dynamicEncoderKeycode = 0x52; // KC_UP
   const encoderWrite = setVialEncoderKeycode(1, dynamicEncoderKeycode);
   const encoderMapAfter = vialEncoderMap();
@@ -678,6 +680,10 @@ function main() {
     initial_map_readback_verified: encoderMapBefore.ccw !== null && encoderMapBefore.clockwise !== null,
     initial_rotation_emitted_oai_event: clockwiseRotation.oaiMessages.some((message) => message.includes('"k":"ENC_CW"')),
     initial_rotation_event: clockwiseRotation.oaiMessages.find((message) => message.includes('"k":"ENC_')) || null,
+    initial_rotation_oai_events: initialRotationOaiEvents,
+    initial_rotation_oai_event_count: initialRotationOaiEvents.length,
+    initial_rotation_emitted_exactly_one_oai_event:
+      initialRotationOaiEvents.length === 1 && initialRotationOaiEvents[0] === expectedClockwiseOaiEvent,
     dynamic_map_write_ack: encoderWrite !== null,
     initial_map_readback: encoderMapBefore,
     programmed_clockwise_keycode: dynamicEncoderKeycode,

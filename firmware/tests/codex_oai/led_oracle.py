@@ -20,6 +20,14 @@ STARTUP_SWEEP_MS = CODEX_LED_COUNT * STARTUP_STEP_MS
 STARTUP_FLASH_MS = 90
 STARTUP_COMPLETION_MS = STARTUP_FLASH_MS * 4
 STARTUP_TOTAL_MS = STARTUP_SWEEP_MS + STARTUP_COMPLETION_MS
+LAYER_TRANSITION_FADE_IN_MS = 250
+LAYER_TRANSITION_HOLD_MS = 500
+LAYER_TRANSITION_FADE_OUT_MS = 250
+LAYER_TRANSITION_TOTAL_MS = (
+    LAYER_TRANSITION_FADE_IN_MS
+    + LAYER_TRANSITION_HOLD_MS
+    + LAYER_TRANSITION_FADE_OUT_MS
+)
 OAI_LINK_WAITING = 0
 OAI_LINK_READY = 1
 OAI_LINK_ERROR = 2
@@ -196,6 +204,7 @@ class Renderer:
         self._layer = 0
         self._feedback: dict[int, int] = {}
         self._startup_started: int | None = None
+        self._transition: tuple[int, int] | None = None
 
     def startup(self, now_ms: int) -> None:
         self._startup_started = now_ms & UINT32_MASK
@@ -274,9 +283,33 @@ class Renderer:
         del now_ms
         self._layer = layer & 0xFF
 
+    def start_layer_transition(self, layer: int, now_ms: int) -> None:
+        self._transition = (layer % len(LAYER_COLORS), now_ms & UINT32_MASK)
+
+    def render_layer_transition(self, now_ms: int) -> list[tuple[int, int, int]] | None:
+        if self._transition is None:
+            return None
+        layer, started = self._transition
+        elapsed = _elapsed(now_ms, started)
+        if elapsed >= LAYER_TRANSITION_TOTAL_MS:
+            self._transition = None
+            return None
+        if elapsed < LAYER_TRANSITION_FADE_IN_MS:
+            level = (elapsed * 255 + (LAYER_TRANSITION_FADE_IN_MS // 2)) // LAYER_TRANSITION_FADE_IN_MS
+        elif elapsed < LAYER_TRANSITION_FADE_IN_MS + LAYER_TRANSITION_HOLD_MS:
+            level = 255
+        else:
+            remaining = LAYER_TRANSITION_TOTAL_MS - elapsed
+            level = (remaining * 255 + (LAYER_TRANSITION_FADE_OUT_MS // 2)) // LAYER_TRANSITION_FADE_OUT_MS
+        color = tuple((channel * level + 127) // 255 for channel in LAYER_COLORS[layer])
+        return [color] * CODEX_LED_COUNT
+
     def layer_color(self, layer: int | None = None) -> tuple[int, int, int]:
         value = self._layer if layer is None else layer
         return LAYER_COLORS[value % len(LAYER_COLORS)]
+
+    def layer_marker(self) -> tuple[int, int, int]:
+        return self.layer_color()
 
     def note_action(self, led_index: int, pressed: bool, now_ms: int) -> None:
         if pressed and CODEX_TASK_LED_COUNT <= led_index <= 12:

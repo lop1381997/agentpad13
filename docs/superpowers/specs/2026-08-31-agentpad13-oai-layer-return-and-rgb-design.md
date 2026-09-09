@@ -30,10 +30,17 @@ native Windows, macOS and Linux app remains out of scope.
 The OAI/Codex layer is QMK/Vial layer index `0`. It is the boot layer and the
 only layer that uses the established Codex task and link renderer. Layers
 `1` through `7` remain ordinary Vial dynamic layers and share one VialRGB
-effect configuration selected by the user in Vial.
+effect configuration selected by the user in Vial. Their only renderer-owned
+pixel is physical chain index `13`: it remains a solid colour from the active
+layer palette so the current layer is visible while every other LED runs the
+selected VialRGB effect.
 
 Changing a layer is transient state only. It must not overwrite Vial's dynamic
 keymap or change its saved default configuration.
+
+A fresh or reset Vial EEPROM receives RGB controls on layer `3`. Existing
+Vial keymaps are deliberately not overwritten: they can be changed in Vial or
+reset explicitly by the owner.
 
 ## Global return-to-OAI chord
 
@@ -58,16 +65,22 @@ The chord is consumed even when layer `0` is already active. It produces no
 normal key/OAI action and, because no layer changes, it does not start a layer
 transition animation.
 
+SW1 is also part of Vial's security-unlock pair, `SW1 + SW13`. While Vial has
+explicitly started that bounded unlock poll, the chord component is disabled
+and leaves both physical matrix rows untouched. This preserves Vial's raw
+unlock observation; immediately outside that flow, SW1+SW4 resumes its normal
+global return-to-OAI behavior.
+
 ## RGB ownership and transition
 
 The active layer is the highest bit of `layer_state | default_layer_state`.
 Every genuine active-layer change, regardless of whether it was caused by the
 touch control, the global chord, or a Vial-assigned layer keycode, starts one
-400 ms full-chain transition:
+one-second full-chain transition:
 
-- `100 ms` fade in to the destination layer colour;
-- `200 ms` solid hold;
-- `100 ms` fade out.
+- `250 ms` fade in to the destination layer colour;
+- `500 ms` solid hold;
+- `250 ms` fade out.
 
 The overlay addresses all 24 logical chain positions. Boards with only the
 opaque-SKU population simply have no visible LEDs at the unpopulated positions.
@@ -91,10 +104,11 @@ After the transition ends:
 - On layer `0`, the existing Codex renderer resumes its task, connection,
   action-feedback, indicator and underglow display from its current OAI
   state.
-- On layers `1` through `7`, the custom renderer releases the RGB matrix to
-  the standard VialRGB effect engine. All non-OAI layers deliberately share
-  the same effect, colour, speed and brightness selected in Vial; this change
-  does not introduce per-layer VialRGB profiles.
+- On layers `1` through `7`, the custom renderer releases every LED except
+  physical index `13` to the standard VialRGB effect engine. Index `13` is
+  painted with the active layer's solid palette colour. All non-OAI layers
+  deliberately share the same effect, colour, speed and brightness selected
+  in Vial; this change does not introduce per-layer VialRGB profiles.
 
 The priority order is: the established on-board calibration overlay, then an
 active layer transition, then the layer-specific owner. A rapid second layer
@@ -125,7 +139,7 @@ The implementation must add or extend automated proof for:
 - `SW1 + SW4` returning to layer `0` from all eight layers, consuming both
   actions, and replaying either key normally outside the 80 ms chord window;
 - a Vial remap of either physical key not disabling the chord;
-- the exact 400 ms timing, palette and restart-on-rapid-change rules;
+- the exact one-second timing, palette and restart-on-rapid-change rules;
 - Codex RGB rendering only on layer `0`, with standard VialRGB ownership on
   layers `1` through `7` after the overlay ends;
 - preservation of calibration-overlay priority, existing OAI events and

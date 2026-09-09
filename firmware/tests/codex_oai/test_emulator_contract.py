@@ -447,6 +447,11 @@ if (!runner.hasValidatedDualConfigPrefix(prefix) || runner.hasValidatedDualConfi
         encoder = evidence["encoder_rotation_behavior"]
         self.assertTrue(encoder["initial_map_readback_verified"])
         self.assertTrue(encoder["initial_rotation_emitted_oai_event"])
+        self.assertEqual(
+            encoder["initial_rotation_oai_events"],
+            ['{"method":"v.oai.hid","params":{"k":"ENC_CW","act":2}}\r\n'],
+        )
+        self.assertTrue(encoder["initial_rotation_emitted_exactly_one_oai_event"])
         self.assertTrue(encoder["dynamic_map_write_ack"])
         self.assertEqual(encoder["programmed_clockwise_keycode"], 0x52)
         self.assertEqual(encoder["map_readback_after_write"], 0x52)

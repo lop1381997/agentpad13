@@ -1,0 +1,6 @@
+node_modules/
+dist/
+src-tauri/target/
+.playwright-cli/
+src-tauri/gen/
+output/playwright/*.png

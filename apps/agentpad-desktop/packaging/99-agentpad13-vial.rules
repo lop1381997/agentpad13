@@ -1,0 +1,2 @@
+# AgentPad13 Vial interface only: 303a:8360.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="8360", TAG+="uaccess"

@@ -1115,6 +1115,11 @@ bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
     // On-board calibration paints unclaimed per-key LEDs after host status.
     selfcal_rgb_overlay(led_min, led_max);
 
+    // The combined OAI/Vial target yields to VialRGB outside its brief
+    // transition overlay, except that its user RGB hook paints the physical
+    // layer marker (chain LED 13) with the Codex palette. This legacy HSV
+    // indicator must therefore remain suppressed in that target.
+#    if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
     // Layer indicator: hue by active layer - only when the host hasn't claimed it.
     if (!loudest_status[LOUDEST_LED_INDICATOR].active && LOUDEST_LED_INDICATOR >= led_min && LOUDEST_LED_INDICATOR < led_max) {
         uint8_t layer = get_highest_layer(layer_state | default_layer_state);
@@ -1122,6 +1127,7 @@ bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
         RGB     rgb   = hsv_to_rgb(hsv);
         rgb_matrix_set_color(LOUDEST_LED_INDICATOR, rgb.r, rgb.g, rgb.b);
     }
+#    endif
 
     return rgb_matrix_indicators_advanced_user(led_min, led_max);
 }

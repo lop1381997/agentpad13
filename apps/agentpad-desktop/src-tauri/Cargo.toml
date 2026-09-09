@@ -1,0 +1,25 @@
+[package]
+name = "agentpad-desktop"
+version = "0.1.0"
+description = "Native desktop editor for AgentPad13 Vial layers"
+authors = ["hirlu"]
+edition = "2024"
+license = "GPL-2.0-or-later"
+
+[lib]
+name = "agentpad_desktop"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+hidapi = { version = "2.6.7", default-features = false, features = ["macos-shared-device", "linux-native", "windows-native"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2"
+thiserror = "2.0.20"
+
+[dev-dependencies]
+tempfile = "3"

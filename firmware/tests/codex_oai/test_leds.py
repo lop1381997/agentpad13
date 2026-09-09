@@ -76,6 +76,39 @@ class Harness:
     def startup(self, now_ms: int) -> None:
         self.command(f"STARTUP {now_ms}")
 
+    def transition(self, layer: int, now_ms: int) -> None:
+        self.command(f"TRANSITION {layer} {now_ms}")
+
+    def marker(self) -> tuple[int, int, int]:
+        assert self._process.stdout is not None
+        self.command("MARKER")
+        fields = self._process.stdout.readline().rstrip("\n").split()
+        if len(fields) != 4 or fields[0] != "MARKER":
+            raise AssertionError(f"invalid marker harness output: {fields!r}")
+        return tuple(map(int, fields[1:]))
+
+    def transition_frame(self, now_ms: int) -> list[tuple[int, int, int]] | None:
+        assert self._process.stdout is not None
+        self.command(f"TRANSITION_RENDER {now_ms}")
+        frame: list[tuple[int, int, int]] = []
+        for line in self._process.stdout:
+            line = line.rstrip("\n")
+            if line == "---":
+                break
+            if line == "INACTIVE":
+                if frame:
+                    raise AssertionError("transition harness emitted inactive after LED data")
+                continue
+            fields = line.split()
+            if len(fields) != 5 or fields[0] != "LED" or int(fields[1]) != len(frame):
+                raise AssertionError(f"invalid transition harness output: {line!r}")
+            frame.append(tuple(map(int, fields[2:])))
+        if not frame:
+            return None
+        if len(frame) != 24:
+            raise AssertionError(f"expected 24 transition LEDs, got {len(frame)}")
+        return frame
+
     def render(self, now_ms: int) -> list[tuple[int, int, int]]:
         assert self._process.stdout is not None
         self.command(f"RENDER {now_ms}")
@@ -304,6 +337,60 @@ class LedParityTest(unittest.TestCase):
         renderer.set_link(led_oracle.OAI_LINK_ERROR, 10)
         self.harness.link(led_oracle.OAI_LINK_ERROR, 10)
         self.assertEqual(self.assert_parity(renderer, 11)[13], (255, 0, 0))
+
+    def test_layer_transition_is_full_chain_and_exactly_one_second(self) -> None:
+        renderer = led_oracle.Renderer()
+        self.harness.transition(4, 1000)
+        renderer.start_layer_transition(4, 1000)
+
+        for now_ms, color in (
+            (1000, (0, 0, 0)),
+            (1125, (0, 32, 128)),
+            (1250, (0, 64, 255)),
+            (1749, (0, 64, 255)),
+            (1875, (0, 32, 128)),
+            (1999, (0, 0, 1)),
+        ):
+            self.assertEqual(self.harness.transition_frame(now_ms), [color] * 24)
+            self.assertEqual(renderer.render_layer_transition(now_ms), [color] * 24)
+        self.assertIsNone(self.harness.transition_frame(2000))
+        self.assertIsNone(renderer.render_layer_transition(2000))
+
+    def test_layer_transition_uses_every_palette_colour_and_restarts(self) -> None:
+        renderer = led_oracle.Renderer()
+        for layer, color in enumerate(led_oracle.LAYER_COLORS):
+            start_ms = 1000 + layer * 1000
+            self.harness.transition(layer, start_ms)
+            renderer.start_layer_transition(layer, start_ms)
+            self.assertEqual(self.harness.transition_frame(start_ms + 250), [color] * 24)
+            self.assertEqual(renderer.render_layer_transition(start_ms + 250), [color] * 24)
+
+        self.harness.transition(2, 10000)
+        renderer.start_layer_transition(2, 10000)
+        self.harness.transition(7, 10120)
+        renderer.start_layer_transition(7, 10120)
+        self.assertEqual(self.harness.transition_frame(10120), [(0, 0, 0)] * 24)
+        self.assertEqual(renderer.render_layer_transition(10120), [(0, 0, 0)] * 24)
+        self.assertEqual(self.harness.transition_frame(10370), [(255, 0, 64)] * 24)
+        self.assertEqual(renderer.render_layer_transition(10370), [(255, 0, 64)] * 24)
+
+    def test_layer_transition_handles_uint32_rollover(self) -> None:
+        renderer = led_oracle.Renderer()
+        start_ms = 0xFFFFFFF0
+        self.harness.transition(1, start_ms)
+        renderer.start_layer_transition(1, start_ms)
+        self.assertEqual(self.harness.transition_frame(0x6D), [(128, 96, 0)] * 24)
+        self.assertEqual(renderer.render_layer_transition(0x6D), [(128, 96, 0)] * 24)
+        self.assertIsNone(self.harness.transition_frame(0x3D8))
+        self.assertIsNone(renderer.render_layer_transition(0x3D8))
+
+    def test_layer_marker_is_the_exact_palette_colour_for_every_layer(self) -> None:
+        renderer = led_oracle.Renderer()
+        for layer, color in enumerate(led_oracle.LAYER_COLORS):
+            self.harness.layer(layer, 100 + layer)
+            renderer.set_layer(layer, 100 + layer)
+            self.assertEqual(self.harness.marker(), color)
+            self.assertEqual(renderer.layer_marker(), color)
 
     def test_startup_sweep_visits_all_24_leds_in_order(self) -> None:
         renderer = led_oracle.Renderer()

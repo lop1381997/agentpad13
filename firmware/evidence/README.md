@@ -4,7 +4,7 @@
 transport, `release/firmware/prebuilt/agentpad13_codex_oai.uf2`. It must match
 the UF2 SHA-256 and byte size recorded in `codex-oai-current-manifest.json`.
 The current port rebuild is 93,696 bytes with SHA-256
-`a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
+`7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
 
 `dual-oai-vial-emulator.json` is the current Task-5 capture for
 `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`. It proves the
@@ -16,10 +16,10 @@ OAI event/LED behavior and response isolation. Its `config_descriptor_recovery_u
 endpoint fields describe rp2040js transport recovery only; they are never
 configuration-descriptor proof. That proof is recorded by the ELF-derived
 static verifier in `dual-oai-vial-current-manifest.json`.
-The current dual rebuild is 123,904 bytes with SHA-256
-`c071ec6f6286eff69785acf12c27a55c6e2c55392a276768514ecd69cf5ea4b0`.
+The current dual rebuild is 125,440 bytes with SHA-256
+`d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18`.
 Its generated version metadata and Vial build ID are fixed by the verified
-builder, and two clean builds produced this exact artifact.
+builder.
 Its verifier manifest is `dual-oai-vial-current-manifest.json`.
 
 `vial-oai-emulator.json` is the historical capture for

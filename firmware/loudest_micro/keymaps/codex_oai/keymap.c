@@ -10,6 +10,13 @@
 #include "codex_oai.h"
 #include "codex_rgb_cap.h"
 
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+#    include "vial.h"
+#    include "dynamic_keymap.h"
+#    include "../vial_oai/oai_led_layout.h"
+#    include "../vial_oai/physical_oai_return.h"
+#endif
+
 #ifndef CODEX_EXTRA_LAYERS
 #    if defined(CODEX_OAI_DYNAMIC_KEYMAP)
 #        define CODEX_EXTRA_LAYERS 6
@@ -118,9 +125,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 #endif
 #if CODEX_EXTRA_LAYERS > 1
     [L_USER3] = LAYOUT(
-        KC_MUTE, KC_VOLD, KC_VOLU, KC_MPLY,
-        KC_MPRV, KC_MNXT, KC_MSTP, KC_CALC,
-        RGB_TOG, RGB_MOD, RGB_HUI, RGB_HUD,
+        RGB_TOG,  RGB_RMOD, RGB_MOD,  RGB_HUI,
+        RGB_HUD,  RGB_SAI,  RGB_SAD,  RGB_VAI,
+        RGB_VAD,  RGB_SPI,  RGB_SPD,  KC_MUTE,
         KC_TRNS,           OAI_ENC, CODEX_TOUCH_LAYER
     ),
 #endif
@@ -171,7 +178,7 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
     [L_CODEX] = { ENCODER_CCW_CW(OAI_ENC_CCW, OAI_ENC_CW) },
     [L_FN]    = { ENCODER_CCW_CW(KC_WH_U, KC_WH_D) },
     [L_USER2] = { ENCODER_CCW_CW(KC_PGUP, KC_PGDN) },
-    [L_USER3] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
+    [L_USER3] = { ENCODER_CCW_CW(RGB_RMOD, RGB_MOD) },
     [L_USER4] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
     [L_USER5] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
     [L_USER6] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) },
@@ -281,9 +288,17 @@ static void select_codex_layer(uint8_t layer) {
         layer = CODEX_OAI_LAYER;
     }
     layer_move(layer);
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
     oai_layer = layer;
     codex_led_set_layer(layer, timer_read32());
+#endif
 }
+
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+static void return_to_codex_layer(void) {
+    select_codex_layer(CODEX_OAI_LAYER);
+}
+#endif
 
 static void cycle_codex_layer(void) {
     uint8_t current = get_highest_layer(layer_state | default_layer_state);
@@ -506,6 +521,12 @@ static bool handle_vial_oai_keycode(uint16_t keycode, keyrecord_t *record) {
     codex_oai_control_t control;
     int8_t physical_position = codex_oai_physical_position(record);
     uint8_t feedback_led = physical_position < 0 ? 0U : codex_oai_feedback_led((uint8_t)physical_position);
+    /* Feedback uses the same logical action slot as the projected LED frame. */
+    if (keycode >= OAI_AG00 && keycode <= OAI_ACT12) {
+        feedback_led = codex_oai_feedback_led((uint8_t)(keycode - OAI_AG00));
+    } else if (keycode == OAI_MICROPHONE) {
+        feedback_led = codex_oai_feedback_led(10U);
+    }
 
     switch (keycode) {
         case OAI_AG00: control = OAI_CONTROL_AG00; break;
@@ -526,12 +547,12 @@ static bool handle_vial_oai_keycode(uint16_t keycode, keyrecord_t *record) {
             (void)notify_encoder_press(record->event.pressed);
             return false;
         case OAI_ENC_CW:
-            if (codex_oai_ready()) {
+            if (record->event.pressed && codex_oai_ready()) {
                 (void)codex_oai_notify(OAI_CONTROL_ENCODER_CW, true);
             }
             return false;
         case OAI_ENC_CCW:
-            if (codex_oai_ready()) {
+            if (record->event.pressed && codex_oai_ready()) {
                 (void)codex_oai_notify(OAI_CONTROL_ENCODER_CCW, true);
             }
             return false;
@@ -564,6 +585,9 @@ void keyboard_post_init_user(void) {
      * layer_state | default_layer_state to select their active layer. */
     default_layer_set(1UL << CODEX_OAI_LAYER);
     select_codex_layer(CODEX_OAI_LAYER);
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+    physical_oai_return_init();
+#endif
     codex_led_startup_begin(timer_read32());
     oai_state_revision = codex_oai_state_revision();
     oai_error_revision = codex_oai_error_revision();
@@ -573,6 +597,11 @@ void keyboard_post_init_user(void) {
 }
 
 void matrix_scan_user(void) {
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+    if (physical_oai_return_matrix_scan(timer_read32(), !vial_unlock_in_progress)) {
+        return_to_codex_layer();
+    }
+#endif
     if (!codex_oai_ready() && safe_pressed && !codex_armed && timer_elapsed32(safe_timer) >= CX_SAFE_ARM_TERM) {
         codex_armed = true;
     }
@@ -646,6 +675,9 @@ void housekeeping_task_user(void) {
     if (active_layer != oai_layer) {
         oai_layer = active_layer;
         codex_led_set_layer(active_layer, now_ms);
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+        codex_led_start_layer_transition(active_layer, now_ms);
+#endif
     }
 
     if (handshake_changed) {
@@ -659,18 +691,60 @@ void housekeeping_task_user(void) {
     }
 }
 
+static void paint_capped_codex_led(
+    uint8_t led, codex_led_rgb_t color, uint8_t led_min,
+    uint8_t led_max, uint8_t current_value
+) {
+    if (led < led_min || led >= led_max || led >= CODEX_LED_COUNT) {
+        return;
+    }
+    rgb_matrix_set_color(
+        led,
+        codex_rgb_cap_channel(color.r, current_value, RGB_MATRIX_MAXIMUM_BRIGHTNESS),
+        codex_rgb_cap_channel(color.g, current_value, RGB_MATRIX_MAXIMUM_BRIGHTNESS),
+        codex_rgb_cap_channel(color.b, current_value, RGB_MATRIX_MAXIMUM_BRIGHTNESS)
+    );
+}
+
+static void paint_capped_codex_frame(
+    const codex_led_rgb_t frame[CODEX_LED_COUNT], uint8_t led_min,
+    uint8_t led_max, uint8_t current_value
+) {
+    for (uint8_t led = led_min; led < led_max && led < CODEX_LED_COUNT; ++led) {
+        paint_capped_codex_led(led, frame[led], led_min, led_max, current_value);
+    }
+}
+
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     codex_led_rgb_t frame[CODEX_LED_COUNT];
+    uint32_t now_ms = timer_read32();
     uint8_t current_value = rgb_matrix_get_val();
-    codex_led_render(timer_read32(), frame);
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+    uint8_t active_layer = get_highest_layer(layer_state | default_layer_state);
+#endif
 
-    for (uint8_t led = led_min; led < led_max && led < CODEX_LED_COUNT; ++led) {
-        rgb_matrix_set_color(
-            led,
-            codex_rgb_cap_channel(frame[led].r, current_value, RGB_MATRIX_MAXIMUM_BRIGHTNESS),
-            codex_rgb_cap_channel(frame[led].g, current_value, RGB_MATRIX_MAXIMUM_BRIGHTNESS),
-            codex_rgb_cap_channel(frame[led].b, current_value, RGB_MATRIX_MAXIMUM_BRIGHTNESS)
-        );
+    if (codex_led_render_layer_transition(now_ms, frame)) {
+        paint_capped_codex_frame(frame, led_min, led_max, current_value);
+        return true;
     }
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+    if (active_layer != CODEX_OAI_LAYER) {
+        paint_capped_codex_led(CODEX_LAYER_INDICATOR_LED, codex_led_layer_color(), led_min, led_max, current_value);
+        return true;
+    }
+#endif
+    codex_led_render(now_ms, frame);
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+    if (!codex_led_startup_active(now_ms)) {
+        uint16_t keycodes[13];
+        for (uint8_t position = 0; position < 13; ++position) {
+            keycodes[position] = dynamic_keymap_get_keycode(
+                CODEX_OAI_LAYER, position / 4U, position % 4U
+            );
+        }
+        oai_led_layout_apply(frame, keycodes, OAI_AG00);
+    }
+#endif
+    paint_capped_codex_frame(frame, led_min, led_max, current_value);
     return true;
 }

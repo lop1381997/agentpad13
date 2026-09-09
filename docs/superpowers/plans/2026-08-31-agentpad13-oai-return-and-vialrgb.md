@@ -6,7 +6,7 @@
 > subagents, push, merge, flash, reset, enumerate or otherwise operate hardware.
 
 **Goal:** Add a physical SW1+SW4 return to OAI layer 0 and make layer 0 use
-the Codex renderer while layers 1–7 use VialRGB after a 400 ms layer-colour
+the Codex renderer while layers 1–7 use VialRGB after a one-second layer-colour
 transition.
 
 **Architecture:** A small `vial_oai` component will observe and mask the two
@@ -29,7 +29,7 @@ QMK dynamic keymaps and RGB Matrix, C11, Python `unittest`, Node/rp2040js.
 - Preserve every OAI request, response, event, LED-task and timing byte contract; `0xA6` remains unreachable in the combined target.
 - Preserve Vial ownership and EEPROM persistence of eight dynamic layers, macros, encoder mappings and VialRGB settings.
 - SW1 is matrix `[0,0]`; SW4 is matrix `[0,3]`; their physical chord window is exactly 80 ms.
-- Every genuine active-layer change uses the destination palette colour for 100 ms fade-in, 200 ms hold and 100 ms fade-out.
+- Every genuine active-layer change uses the destination palette colour for 250 ms fade-in, 500 ms hold and 250 ms fade-out.
 - The calibration overlay has priority over the transition and all ordinary RGB owners.
 - Direct OAI must retain its present behavior; no `COMBO_ENABLE` keycode combo may be added.
 - Build and verify locally only. Do not perform a physical operation, remote operation, merge or push.
@@ -44,18 +44,39 @@ QMK dynamic keymaps and RGB Matrix, C11, Python `unittest`, Node/rp2040js.
 | `firmware/loudest_micro/keymaps/vial_oai/physical_oai_return.c` | Matrix masking, 80 ms detection, normal-event replay and chord-consumption state. |
 | `firmware/loudest_micro/keymaps/vial_oai/rules.mk` | Builds the physical-chord component only into the combined target. |
 | `firmware/loudest_micro/keymaps/codex_oai/keymap.c` | Calls the component, selects layer 0 in RAM, starts layer transitions and selects the RGB owner. |
-| `firmware/loudest_micro/keymaps/codex_oai/codex_led.h` | Declares the 400 ms transition API. |
+| `firmware/loudest_micro/keymaps/codex_oai/codex_led.h` | Declares the one-second transition API. |
 | `firmware/loudest_micro/keymaps/codex_oai/codex_led.c` | Stores transition state, uses the existing eight-colour palette and renders the full-chain overlay. |
 | `firmware/tests/codex_oai/physical_oai_return_harness.c` | Host C harness that records injected matrix events and successful chords. |
 | `firmware/tests/codex_oai/stubs/physical_oai_return_qmk.h` | Minimal QMK API and matrix declarations for the chord harness. |
 | `firmware/tests/codex_oai/test_vial_oai_layer_control.py` | Deterministic tests for physical chord timing, dynamic-layer integration and RGB ownership. |
 | `firmware/tests/codex_oai/led_harness.c` | Adds transition commands to the existing real-LED C harness. |
-| `firmware/tests/codex_oai/led_oracle.py` | Independent Python oracle for the 400 ms transition frame. |
+| `firmware/tests/codex_oai/led_oracle.py` | Independent Python oracle for the one-second transition frame. |
 | `firmware/tests/codex_oai/test_leds.py` | Frame-for-frame transition timing and rapid-change tests. |
 | `firmware/tests/emulator/dual_oai_vial_runner.cjs` | Runtime proof that a Vial remap cannot disable SW1+SW4 and that no chord key leaks. |
 | `firmware/tests/codex_oai/test_emulator_contract.py` | Requires the new runtime evidence fields. |
+| `firmware/tests/codex_oai/test_artifact_verifier.py`, `firmware/tools/verify_codex_oai_artifact.py` | Reject an OAI/Vial candidate whose encoder evidence does not prove exactly one OAI event per detent. |
 | `docs/dual-oai-vial-physical-runbook.md` | Adds tester-facing chord, flash and post-transition checks. |
 | `firmware/BUILD.md`, `release/MANIFEST.md`, `firmware/evidence/dual-oai-vial-current-manifest.json` | Record the rebuilt local candidate and its generated hash. |
+
+### Pre-task (completed): ensure an OAI encoder detent emits one event
+
+The Vial dynamic encoder map dispatches a virtual press and release for every
+physical detent. The OAI encoder keycodes must notify the OAI transport only
+on the press edge; otherwise a clockwise or counter-clockwise detent produces
+two identical `ENC_CW` or `ENC_CC` messages. This is unrelated to the physical
+encoder model and does not affect standard volume mappings.
+
+- [x] Add a failing dual-emulator assertion that captures the OAI frames
+  produced by an initial Vial encoder-map rotation and requires the exact
+  one-element sequence `ENC_CW` with `act:2`.
+- [x] Gate `OAI_ENC_CW` and `OAI_ENC_CCW` in `process_record_user()` on
+  `record->event.pressed`, preserving direct OAI, Vial remapping and ordinary
+  multimedia encoder behavior.
+- [x] Require the same `initial_rotation_emitted_exactly_one_oai_event`
+  evidence field in the offline artifact verifier, so a duplicate-event UF2
+  cannot be accepted as a verified candidate.
+- [x] Rebuild the dual candidate, regenerate emulator evidence and its static
+  verifier manifest before beginning the layer-return and RGB work.
 
 ### Task 1: Build the physical SW1+SW4 state machine behind a host harness
 
@@ -73,9 +94,11 @@ QMK dynamic keymaps and RGB Matrix, C11, Python `unittest`, Node/rp2040js.
 - Consumes: the debounced QMK `matrix[0]` row, `matrix_is_on()`,
   `action_exec(MAKE_KEYEVENT(...))` and `timer_read32()`.
 - Produces: `void physical_oai_return_init(void)` and
-  `bool physical_oai_return_matrix_scan(uint32_t now_ms)`. The scan call
+  `bool physical_oai_return_matrix_scan(uint32_t now_ms, bool enabled)`. The scan call
   masks SW1/SW4 before QMK keycode lookup and returns `true` exactly once for
-  a valid chord.
+  a valid chord. `enabled` is false only while Vial actively polls its
+  overlapping SW1+SW13 security-unlock combination, leaving that raw matrix
+  state visible to Vial.
 
 - [ ] **Step 1: Write the failing physical-event tests**
 
@@ -370,7 +393,7 @@ git add firmware/loudest_micro/keymaps/codex_oai/keymap.c firmware/tests/codex_o
 git commit -m "feat: return Vial layers to Codex with SW1 SW4"
 ```
 
-### Task 3: Add the exact 400 ms full-chain layer transition to the Codex LED module
+### Task 3: Add the exact one-second full-chain layer transition to the Codex LED module
 
 **Files:**
 
@@ -393,27 +416,27 @@ Add this test to `test_leds.py`; use layer 4 because its non-equal green and
 blue channels make interpolation errors visible:
 
 ```python
-def test_layer_transition_is_full_chain_and_exactly_400ms(self) -> None:
+def test_layer_transition_is_full_chain_and_exactly_one_second(self) -> None:
     self.harness.transition(4, 1000)
     renderer = led_oracle.Renderer()
     renderer.start_layer_transition(4, 1000)
     for now_ms, color in (
         (1000, (0, 0, 0)),
-        (1050, (0, 32, 128)),
-        (1100, (0, 64, 255)),
-        (1299, (0, 64, 255)),
-        (1350, (0, 32, 128)),
-        (1399, (0, 1, 3)),
+        (1125, (0, 32, 128)),
+        (1250, (0, 64, 255)),
+        (1749, (0, 64, 255)),
+        (1875, (0, 32, 128)),
+        (1999, (0, 0, 1)),
     ):
         self.assertEqual(self.harness.transition_frame(now_ms), [color] * 24)
         self.assertEqual(renderer.render_layer_transition(now_ms), [color] * 24)
-    self.assertIsNone(renderer.render_layer_transition(1400))
-    self.assertIsNone(self.harness.transition_frame(1400))
+    self.assertIsNone(renderer.render_layer_transition(2000))
+    self.assertIsNone(self.harness.transition_frame(2000))
 ```
 
 Add tests for all eight destination colours, unsigned-32-bit rollover and a
 rapid change: starting layer 2 at `1000`, then layer 7 at `1120`, must render
-black at `1120` and rose at full intensity at `1220`; it must never resume the
+black at `1120` and rose at full intensity at `1370`; it must never resume the
 old green transition.
 
 - [ ] **Step 2: Run the LED test module and confirm the expected failure**
@@ -432,10 +455,10 @@ exists.
 In `codex_led.h`, add:
 
 ```c
-#define CODEX_LAYER_TRANSITION_FADE_IN_MS 100U
-#define CODEX_LAYER_TRANSITION_HOLD_MS 200U
-#define CODEX_LAYER_TRANSITION_FADE_OUT_MS 100U
-#define CODEX_LAYER_TRANSITION_TOTAL_MS 400U
+#define CODEX_LAYER_TRANSITION_FADE_IN_MS 250U
+#define CODEX_LAYER_TRANSITION_HOLD_MS 500U
+#define CODEX_LAYER_TRANSITION_FADE_OUT_MS 250U
+#define CODEX_LAYER_TRANSITION_TOTAL_MS 1000U
 
 void codex_led_start_layer_transition(uint8_t layer, uint32_t now_ms);
 bool codex_led_render_layer_transition(uint32_t now_ms, codex_led_rgb_t output[CODEX_LED_COUNT]);
@@ -455,10 +478,10 @@ Use this integer level calculation, which matches the expected values above:
 uint32_t elapsed = (uint32_t)(now_ms - layer_transition.started_ms);
 uint8_t level = 255U;
 if (elapsed < CODEX_LAYER_TRANSITION_FADE_IN_MS) {
-    level = (uint8_t)((elapsed * 255U + 50U) / CODEX_LAYER_TRANSITION_FADE_IN_MS);
+    level = (uint8_t)((elapsed * 255U + (CODEX_LAYER_TRANSITION_FADE_IN_MS / 2U)) / CODEX_LAYER_TRANSITION_FADE_IN_MS);
 } else if (elapsed >= CODEX_LAYER_TRANSITION_FADE_IN_MS + CODEX_LAYER_TRANSITION_HOLD_MS) {
     uint32_t remaining = CODEX_LAYER_TRANSITION_TOTAL_MS - elapsed;
-    level = (uint8_t)((remaining * 255U + 50U) / CODEX_LAYER_TRANSITION_FADE_OUT_MS);
+    level = (uint8_t)((remaining * 255U + (CODEX_LAYER_TRANSITION_FADE_OUT_MS / 2U)) / CODEX_LAYER_TRANSITION_FADE_OUT_MS);
 }
 ```
 
@@ -481,7 +504,7 @@ def start_layer_transition(self, layer: int, now_ms: int) -> None:
     self._transition = (layer % len(LAYER_COLORS), now_ms & UINT32_MASK)
 
 def render_layer_transition(self, now_ms: int) -> list[tuple[int, int, int]] | None:
-    # Return None at 400 ms or later; otherwise return one scaled palette colour 24 times.
+    # Return None at 1000 ms or later; otherwise return one scaled palette colour 24 times.
 ```
 
 The Python calculation must be independent of the C source and use the same
@@ -763,7 +786,7 @@ exact command outputs. Preserve the recovery artifact values unchanged.
 
 Add these physical rows to the runbook, all marked pending until separately
 authorized: from layers 1 through 7 press SW1+SW4 and confirm layer 0; confirm
-no assigned SW1/SW4 action runs during the chord; verify the 400 ms destination
+no assigned SW1/SW4 action runs during the chord; verify the one-second destination
 colour flash; verify Codex task/status output after returning to layer 0; and
 verify a VialRGB effect resumes after the same transition on layers 1–7.
 
@@ -802,7 +825,7 @@ merge this branch.
 
 - Spec coverage: Task 1 implements physical detection, 80 ms timing,
   suppression and ordinary replay; Task 2 makes it a RAM-only global layer-0
-  return; Task 3 implements all palette and 400 ms timing requirements; Task
+  return; Task 3 implements all palette and one-second timing requirements; Task
   4 applies RGB ownership, calibration priority and runtime remap proof; Task
   5 rebuilds, verifies and records the local delivery package.
 - Compatibility: every task preserves the three HID interfaces, OAI framing,

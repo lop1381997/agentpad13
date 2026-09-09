@@ -28,6 +28,26 @@ static void render(uint32_t now_ms) {
     fflush(stdout);
 }
 
+static void render_transition(uint32_t now_ms) {
+    codex_led_rgb_t frame[CODEX_LED_COUNT];
+    if (!codex_led_render_layer_transition(now_ms, frame)) {
+        printf("INACTIVE\n---\n");
+        fflush(stdout);
+        return;
+    }
+    for (uint8_t index = 0; index < CODEX_LED_COUNT; ++index) {
+        printf("LED %u %u %u %u\n", index, frame[index].r, frame[index].g, frame[index].b);
+    }
+    printf("---\n");
+    fflush(stdout);
+}
+
+static void print_layer_marker(void) {
+    codex_led_rgb_t color = codex_led_layer_color();
+    printf("MARKER %u %u %u\n", color.r, color.g, color.b);
+    fflush(stdout);
+}
+
 int main(void) {
     char line[256];
     reset();
@@ -52,6 +72,12 @@ int main(void) {
             codex_led_note_action((uint8_t)led, pressed != 0U, (uint32_t)now_ms);
         } else if (sscanf(line, "STARTUP %lu", &now_ms) == 1) {
             codex_led_startup_begin((uint32_t)now_ms);
+        } else if (sscanf(line, "TRANSITION %u %lu", &state, &now_ms) == 2) {
+            codex_led_start_layer_transition((uint8_t)state, (uint32_t)now_ms);
+        } else if (sscanf(line, "TRANSITION_RENDER %lu", &now_ms) == 1) {
+            render_transition((uint32_t)now_ms);
+        } else if (strcmp(line, "MARKER\n") == 0) {
+            print_layer_marker();
         } else if (sscanf(line, "RENDER %lu", &now_ms) == 1) {
             render((uint32_t)now_ms);
         }

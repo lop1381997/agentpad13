@@ -66,6 +66,14 @@ The [build guide](firmware/BUILD.md#agentpad13-vial-oai-phase-3-firmware-foundat
 explains the Vial/OAI boundary; physical validation remains pending in its
 [runbook](docs/vial-oai-physical-runbook.md).
 
+### AgentPad13 Desktop editor
+
+[`apps/agentpad-desktop/`](apps/agentpad-desktop/) contains the in-progress
+native Phase-3 editor for the eight Vial layers and encoder map. It is a Tauri
+application for macOS, Windows, and Linux that opens only the Vial HID
+collection; it neither flashes firmware nor opens the separate Codex protocol.
+See its [local guide](apps/agentpad-desktop/README.md).
+
 ### AgentPad13 Direct OAI (experimental alternative)
 
 The isolated `codex_oai` keymap is an experimental alternative for direct

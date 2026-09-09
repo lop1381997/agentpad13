@@ -1,7 +1,7 @@
 {
-  "uf2_blocks": 242,
-  "uf2_size_bytes": 123904,
-  "uf2_sha256": "c071ec6f6286eff69785acf12c27a55c6e2c55392a276768514ecd69cf5ea4b0",
+  "uf2_blocks": 245,
+  "uf2_size_bytes": 125440,
+  "uf2_sha256": "d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18",
   "usb_enumerated": true,
   "vid_pid": "303a:8360",
   "vial_interface": {
@@ -72,6 +72,11 @@
     "initial_map_readback_verified": true,
     "initial_rotation_emitted_oai_event": true,
     "initial_rotation_event": "{\"method\":\"v.oai.hid\",\"params\":{\"k\":\"ENC_CW\",\"act\":2}}\r\n",
+    "initial_rotation_oai_events": [
+      "{\"method\":\"v.oai.hid\",\"params\":{\"k\":\"ENC_CW\",\"act\":2}}\r\n"
+    ],
+    "initial_rotation_oai_event_count": 1,
+    "initial_rotation_emitted_exactly_one_oai_event": true,
     "dynamic_map_write_ack": true,
     "initial_map_readback": {
       "ccw": 32274,
@@ -113,29 +118,27 @@
   },
   "ws2812_activity": true,
   "channels_isolated": true,
-  "gp17_edges_after_thstatus": 38016,
+  "gp17_edges_after_thstatus": 39168,
   "usb_events": [
     "[257.2ms] USB controller enabled",
     "[267.2ms] USB reset",
     "[600.1ms] vial IN 32B",
     "[600.2ms] oai IN 64B",
-    "[1120.1ms] vial IN 32B",
+    "[1120.0ms] vial IN 32B",
     "[1390.2ms] oai IN 64B",
     "[1910.2ms] oai IN 64B",
-    "[2184.3ms] oai IN 64B",
+    "[2184.4ms] oai IN 64B",
     "[2480.1ms] vial IN 32B",
     "[2930.1ms] oai IN 64B",
-    "[2930.2ms] oai IN 64B",
     "[3180.1ms] oai IN 64B",
-    "[3180.2ms] oai IN 64B",
     "[3230.5ms] vial IN 32B",
     "[3480.1ms] vial IN 32B",
     "[3930.1ms] hid0 IN 9B",
     "[3930.2ms] hid0 IN 9B",
     "[3980.3ms] vial IN 32B",
-    "[4234.3ms] hid0 IN 9B",
-    "[4384.3ms] hid0 IN 9B",
-    "[4530.1ms] hid0 IN 5B",
+    "[4234.4ms] hid0 IN 9B",
+    "[4234.4ms] hid0 IN 9B",
+    "[4530.0ms] hid0 IN 5B",
     "[5230.0ms] hid0 IN 5B"
   ]
 }

@@ -1,18 +1,21 @@
 {
-  "elf_sha256": "8f3b8b80e4f4058bdcd4b0045c6a878e54e2e58a89e4fcdccb713fec8db334dd",
+  "device_identity": {},
+  "elf_sha256": "2d1d0ee835e1dc9c5b30ad19c7cbefd3477b870193b2307b7d2e0f4e97153e58",
   "elf_size": {
-    "bss": 265192,
+    "bss": 265376,
     "data": 0,
-    "text": 46668
+    "text": 46636
   },
   "elf_uf2_equivalence": {
-    "elf_binary_size_bytes": 46668,
+    "elf_binary_size_bytes": 46636,
     "flash_base": "0x10000000",
     "status": "pass",
-    "trailing_zero_padding_bytes": 180,
+    "trailing_zero_padding_bytes": 212,
     "uf2_flash_size_bytes": 46848
   },
   "emulator_evidence": {
+    "config_descriptor_recovery_used": null,
+    "configuration_descriptor_verified": null,
     "descriptor_verified": true,
     "device_status_ack": true,
     "key_event": {
@@ -21,10 +24,11 @@
     },
     "keyboard_hid_enumerated": true,
     "oai_hid_enumerated": true,
+    "report_descriptors_verified": null,
     "rgbcfg_ack": true,
     "task_status_fragment_count": 2,
     "thstatus_ack": true,
-    "uf2_sha256": "a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9",
+    "uf2_sha256": "7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e",
     "uf2_size_bytes": 93696,
     "usb_enumerated": true,
     "ws2812_activity": true
@@ -37,10 +41,26 @@
     "encoder_update_user",
     "raw_hid_receive"
   ],
-  "sha256": "a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9",
+  "sha256": "7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e",
   "size_bytes": 93696,
   "status": "pass",
   "target": "loudest_micro:codex_oai",
   "usage": "ff00:0061",
+  "usb_descriptor_contract": {
+    "configuration_total_length": 66,
+    "endpoint_addresses": [
+      2,
+      129
+    ],
+    "interfaces": [
+      {
+        "endpoint_bytes": 64,
+        "interface": 1,
+        "role": "oai"
+      }
+    ],
+    "keyboard_interface": 0,
+    "status": "pass"
+  },
   "vid_pid": "303a:8360"
 }

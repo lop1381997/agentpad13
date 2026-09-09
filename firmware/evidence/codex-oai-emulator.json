@@ -1,7 +1,7 @@
 {
   "uf2_blocks": 183,
   "uf2_size_bytes": 93696,
-  "uf2_sha256": "a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9",
+  "uf2_sha256": "7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e",
   "usb_enumerated": true,
   "vid_pid": "303a:8360",
   "usage": "ff00:0061",
@@ -11,13 +11,13 @@
   "oai_hid_enumerated": true,
   "keyboard_interface": {
     "number": 0,
-    "in_endpoint": 1,
-    "in_bytes": 8
+    "in_endpoint": 3,
+    "in_bytes": 32
   },
   "interface": {
     "number": 1,
-    "in_endpoint": 2,
-    "out_endpoint": 3,
+    "in_endpoint": 1,
+    "out_endpoint": 2,
     "in_bytes": 64,
     "out_bytes": 64
   },

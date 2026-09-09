@@ -155,8 +155,8 @@ Recorded results and the emulator-fidelity caveats are in
 ### AgentPad13 OAI + Vial dual HID (current local candidate)
 
 The current Task-5 candidate is
-`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 123,904 bytes, SHA-256
-`c071ec6f6286eff69785acf12c27a55c6e2c55392a276768514ecd69cf5ea4b0`.
+`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 125,440 bytes, SHA-256
+`d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18`.
 Its paired Vial definition is
 `release/firmware/prebuilt/agentpad13_oai_vial_dual.vial`. It keeps the Direct
 OAI identity and wire contract (`303A:8360`, `FF00:61`, Report ID 6, 64-byte
@@ -168,6 +168,16 @@ readback/write/rotation behavior and LED/event behavior pass in the recorded
 offline evidence. The emulator’s
 truncated configuration recovery is explicitly synthetic and never counts as
 configuration-descriptor proof; the ELF-derived static verifier is authoritative.
+On layer 0 the Codex renderer owns the task display. On dynamic layers 1–7,
+VialRGB owns the matrix except physical chain LED 13, which remains the solid
+active-layer colour. Every layer change overlays the entire chain for one
+second (250 ms fade-in, 500 ms hold, 250 ms fade-out). A fresh/reset Vial
+EEPROM exposes RGB controls on layer 3: toggle, effect, hue, saturation,
+brightness and speed; its encoder selects the previous/next effect.
+Pressing **SW1 + SW4** together (the physical positions `[0,0]` and `[0,3]`)
+returns to OAI/Codex layer 0 from any layer. The firmware uses an 80 ms
+physical-chord window so Vial remaps cannot disable it. Vial's separate
+SW1+SW13 unlock procedure remains available while its unlock check runs.
 The candidate is byte-reproducible: two clean builds with the pinned compiler
 produced this same SHA-256. The builder fixes QMK's generated version metadata
 and Vial `BUILD_ID` for this target, so the result does not depend on a clock
@@ -228,7 +238,7 @@ python3 firmware/tools/build_codex_oai.py \
 
 The current output is
 `release/firmware/prebuilt/agentpad13_codex_oai.uf2`, 93,696 bytes, SHA-256
-`a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
+`7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
 Run the complete host and emulator gates from the repository root:
 
 ```sh

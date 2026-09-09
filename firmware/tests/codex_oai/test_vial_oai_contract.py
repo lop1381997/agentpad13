@@ -132,6 +132,44 @@ class VialOaiLayoutContractTest(unittest.TestCase):
         ):
             self.assertIn(f'"name": "{keycode}"', vial)
 
+    def test_dynamic_target_uses_transition_then_releases_vialrgb_except_layer_marker(self) -> None:
+        """VialRGB owns layers 1–7 except the fixed physical layer marker."""
+        source = SHARED_KEYMAP.read_text(encoding="utf-8")
+        keyboard = KEYBOARD_SOURCE.read_text(encoding="utf-8")
+        layer_change = source[source.index("if (active_layer != oai_layer)"):source.index("if (handshake_changed)")]
+        rgb_hook = source[source.index("bool rgb_matrix_indicators_advanced_user"):]
+
+        self.assertIn("codex_led_start_layer_transition(active_layer, now_ms);", layer_change)
+        self.assertIn("#if defined(CODEX_OAI_DYNAMIC_KEYMAP)", layer_change)
+        self.assertIn("codex_led_render_layer_transition(now_ms, frame)", rgb_hook)
+        self.assertIn("if (active_layer != CODEX_OAI_LAYER)", rgb_hook)
+        self.assertIn("static void paint_capped_codex_led(", source)
+        self.assertIn(
+            "paint_capped_codex_led(CODEX_LAYER_INDICATOR_LED, codex_led_layer_color(), led_min, led_max, current_value);",
+            rgb_hook,
+        )
+        self.assertLess(
+            rgb_hook.index("codex_led_render_layer_transition(now_ms, frame)"),
+            rgb_hook.index("if (active_layer != CODEX_OAI_LAYER)"),
+        )
+        self.assertLess(
+            rgb_hook.index("if (active_layer != CODEX_OAI_LAYER)"),
+            rgb_hook.index("codex_led_render(now_ms, frame)"),
+        )
+        self.assertIn("#    if !defined(CODEX_OAI_DYNAMIC_KEYMAP)", keyboard)
+
+    def test_layer_three_defaults_to_full_vialrgb_controls(self) -> None:
+        """A fresh Vial EEPROM exposes effect, hue, saturation, value and speed controls."""
+        source = SHARED_KEYMAP.read_text(encoding="utf-8")
+        expected_layout = """[L_USER3] = LAYOUT(
+        RGB_TOG,  RGB_RMOD, RGB_MOD,  RGB_HUI,
+        RGB_HUD,  RGB_SAI,  RGB_SAD,  RGB_VAI,
+        RGB_VAD,  RGB_SPI,  RGB_SPD,  KC_MUTE,
+        KC_TRNS,           OAI_ENC, CODEX_TOUCH_LAYER
+    ),"""
+        self.assertIn(expected_layout, source)
+        self.assertIn("[L_USER3] = { ENCODER_CCW_CW(RGB_RMOD, RGB_MOD) },", source)
+
 
 class VialOaiProtocolContractTest(unittest.TestCase):
     def test_dual_oai_uses_only_the_dedicated_report_id_six_transport(self) -> None:

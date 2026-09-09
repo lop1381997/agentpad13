@@ -15,6 +15,7 @@ KEYBOARD_SHARED_EP = yes
 SRC += ../codex_oai/codex_oai.c
 SRC += ../codex_oai/codex_led.c
 SRC += encoder_contract.c
+SRC += physical_oai_return.c
 
 # Retain the legacy symbol required by the offline artifact verifier; runtime
 # encoder dispatch remains exclusively in Vial's dynamic encoder map.

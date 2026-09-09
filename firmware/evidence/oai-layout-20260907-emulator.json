@@ -1,0 +1,146 @@
+{
+  "uf2_blocks": 246,
+  "uf2_size_bytes": 125952,
+  "uf2_sha256": "8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda",
+  "usb_enumerated": true,
+  "vid_pid": "303a:8360",
+  "vial_interface": {
+    "usage": "ff60:0061",
+    "report_id": null,
+    "report_bytes": 32
+  },
+  "oai_interface": {
+    "usage": "ff00:0061",
+    "report_id": 6,
+    "report_bytes": 64
+  },
+  "vial_endpoint": {
+    "number": 1,
+    "in_endpoint": 1,
+    "out_endpoint": 2,
+    "in_bytes": 32,
+    "out_bytes": 32
+  },
+  "oai_endpoint": {
+    "number": 2,
+    "in_endpoint": 3,
+    "out_endpoint": 4,
+    "in_bytes": 64,
+    "out_bytes": 64
+  },
+  "report_descriptor_requests": [
+    1,
+    2
+  ],
+  "config_descriptor_recovery_used": true,
+  "synthetic_vial_out_endpoint": {
+    "interface_number": 1,
+    "out_endpoint": 2,
+    "out_endpoint_address": 2,
+    "not_descriptor_proof": true
+  },
+  "synthetic_oai_endpoint": {
+    "interface_number": 2,
+    "in_endpoint": 3,
+    "out_endpoint": 4,
+    "in_endpoint_address": 131,
+    "out_endpoint_address": 4,
+    "not_descriptor_proof": true
+  },
+  "keyboard_hid_enumerated": true,
+  "keyboard_report_behavior": {
+    "report_bytes": 8,
+    "report_count": 4,
+    "reports_after_key": 2,
+    "press_seen": true,
+    "release_seen": true
+  },
+  "joystick_report_behavior": {
+    "report_id": 7,
+    "report_count": 4,
+    "axes_a": [
+      -486,
+      488
+    ],
+    "axes_b": [
+      488,
+      -486
+    ],
+    "axes_swung": true
+  },
+  "encoder_rotation_behavior": {
+    "initial_map_readback_verified": true,
+    "initial_rotation_emitted_oai_event": true,
+    "initial_rotation_event": "{\"method\":\"v.oai.hid\",\"params\":{\"k\":\"ENC_CW\",\"act\":2}}\r\n",
+    "initial_rotation_oai_events": [
+      "{\"method\":\"v.oai.hid\",\"params\":{\"k\":\"ENC_CW\",\"act\":2}}\r\n"
+    ],
+    "initial_rotation_oai_event_count": 1,
+    "initial_rotation_emitted_exactly_one_oai_event": true,
+    "dynamic_map_write_ack": true,
+    "initial_map_readback": {
+      "ccw": 32274,
+      "clockwise": 32273
+    },
+    "programmed_clockwise_keycode": 82,
+    "map_readback_after_write": 82,
+    "rotation_after_map_write_seen": true,
+    "rotation_used_programmed_keycode": true
+  },
+  "shared_keyboard_joystick_endpoint": {
+    "keyboard_endpoint": 5,
+    "joystick_endpoint": 5
+  },
+  "oai_hid_enumerated": true,
+  "report_descriptors_verified": true,
+  "configuration_descriptor_verified": false,
+  "descriptor_verified": false,
+  "device_identity": {
+    "manufacturer": "hirlu",
+    "product": "Codex Micro Lab OAI LED"
+  },
+  "vial_protocol_ack": true,
+  "vial_default_k00": 32258,
+  "rgbcfg_ack": true,
+  "thstatus_ack": true,
+  "device_status_ack": true,
+  "task_status": {
+    "id": 0,
+    "c": 3162110,
+    "e": 4,
+    "b": 1,
+    "s": 0.5
+  },
+  "task_status_fragment_count": 2,
+  "key_event": {
+    "k": "AG00",
+    "act": 1
+  },
+  "ws2812_activity": true,
+  "channels_isolated": true,
+  "gp17_edges_after_thstatus": 39168,
+  "usb_events": [
+    "[257.2ms] USB controller enabled",
+    "[267.2ms] USB reset",
+    "[600.1ms] vial IN 32B",
+    "[600.2ms] oai IN 64B",
+    "[1120.1ms] vial IN 32B",
+    "[1390.2ms] oai IN 64B",
+    "[1910.1ms] oai IN 64B",
+    "[2184.4ms] oai IN 64B",
+    "[2480.1ms] vial IN 32B",
+    "[2930.1ms] oai IN 64B",
+    "[3180.1ms] oai IN 64B",
+    "[3230.5ms] vial IN 32B",
+    "[3480.0ms] vial IN 32B",
+    "[3930.1ms] hid0 IN 9B",
+    "[3930.2ms] hid0 IN 9B",
+    "[3980.3ms] vial IN 32B",
+    "[4234.4ms] hid0 IN 9B",
+    "[4234.4ms] hid0 IN 9B",
+    "[4530.0ms] hid0 IN 5B",
+    "[4530.1ms] hid0 IN 5B",
+    "[5230.0ms] hid0 IN 5B",
+    "[5230.1ms] hid0 IN 5B"
+  ]
+}

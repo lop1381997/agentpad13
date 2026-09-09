@@ -16,6 +16,18 @@ KEYMAP = KEYBOARD / "keymaps" / "codex_oai"
 
 
 class RgbPowerCapTest(unittest.TestCase):
+    def test_oai_layout_swaps_preserve_colors_and_reserved_leds(self) -> None:
+        board = json.loads((KEYBOARD / "keyboard.json").read_text(encoding="utf-8"))
+        for position, led in enumerate(board["rgb_matrix"]["layout"][:13]):
+            self.assertEqual(led["matrix"], [position // 4, position % 4])
+        with tempfile.TemporaryDirectory(prefix="agentpad13_layout_") as directory:
+            binary = Path(directory) / "layout"
+            subprocess.run([
+                "cc", "-std=c11", "-Wall", "-Wextra", "-Werror",
+                str(HERE / "oai_led_layout_harness.c"), "-o", str(binary),
+            ], check=True)
+            subprocess.run([str(binary)], check=True)
+
     def test_all_channels_and_live_values_stay_below_board_cap(self) -> None:
         board = json.loads((KEYBOARD / "keyboard.json").read_text(encoding="utf-8"))
         cap = board["rgb_matrix"]["max_brightness"]
@@ -53,7 +65,9 @@ int main(void) {
     def test_keymap_caps_only_the_physical_output_path(self) -> None:
         source = (KEYMAP / "keymap.c").read_text(encoding="utf-8")
         self.assertIn("rgb_matrix_get_val()", source)
-        self.assertEqual(source.count("codex_rgb_cap_channel(frame[led]."), 3)
+        self.assertIn("static void paint_capped_codex_led(", source)
+        self.assertEqual(source.count("codex_rgb_cap_channel(color."), 3)
+        self.assertIn("paint_capped_codex_led(led, frame[led], led_min, led_max, current_value);", source)
         self.assertIn("RGB_MATRIX_MAXIMUM_BRIGHTNESS", source)
 
 

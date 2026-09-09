@@ -5,7 +5,7 @@
 > “current” inside those sections means current at that dated stage and is
 > superseded by the destination port rebuild. The current release is
 > `release/firmware/prebuilt/agentpad13_codex_oai.uf2`, 93,696 bytes, SHA-256
-> `a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
+> `7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
 > All physical observations remain PENDING and no flash occurred.
 
 This is a reproducible pre-hardware record for the isolated `codex_oai`
@@ -500,7 +500,7 @@ unflashed release candidate is:
 |---|---|
 | File | `release/firmware/prebuilt/agentpad13_codex_oai.uf2` |
 | UF2 size | `93,696` bytes |
-| UF2 SHA-256 | `a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9` |
+| UF2 SHA-256 | `7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e` |
 | USB / Raw HID | `303A:8360` / `FF00:0061`, Report ID `6`, 64 bytes |
 | Current evidence | `firmware/evidence/codex-oai-emulator.json` and `firmware/evidence/codex-oai-current-manifest.json` |
 | Physical flash operations | `0` |

@@ -4,7 +4,7 @@
 > candidate facts observed during the original AgentPad13 work. Its artifact
 > values are superseded. The current destination release is
 > `release/firmware/prebuilt/agentpad13_codex_oai.uf2`, 93,696 bytes, SHA-256
-> `a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
+> `7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
 > Current physical validation remains PENDING; no flash occurred.
 
 ## Scope and verdict

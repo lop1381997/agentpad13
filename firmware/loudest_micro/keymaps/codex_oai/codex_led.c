@@ -23,7 +23,7 @@ enum {
     /* Chain index 13 is the physical TP5/layer indicator LED.  Its hue always
      * follows the active layer; link waiting/error is a tint or slow pulse so
      * a layer change is still visible before the OAI handshake. */
-    LED_LAYER_INDEX = 13,
+    LED_LAYER_INDEX = CODEX_LAYER_INDICATOR_LED,
     LED_UNDERGLOW_FIRST = 14,
     LED_UNDERGLOW_LAST = 23,
 };
@@ -93,6 +93,12 @@ typedef struct {
     bool active;
 } feedback_context_t;
 
+typedef struct {
+    uint32_t started_ms;
+    uint8_t layer;
+    bool active;
+} layer_transition_context_t;
+
 static task_context_t tasks_by_led[CODEX_TASK_LED_COUNT];
 static feedback_context_t feedback[LED_GLOBAL_INDEX - CODEX_TASK_LED_COUNT + 1];
 static oai_link_state_t link_state;
@@ -100,6 +106,7 @@ static uint32_t link_started_ms;
 static uint8_t layer_index;
 static uint32_t startup_started_ms;
 static bool startup_running;
+static layer_transition_context_t layer_transition;
 
 #if CODEX_LED_ANIMATION_ENABLE
 static uint8_t effect_numerator(uint8_t effect, uint8_t index) {
@@ -367,6 +374,10 @@ static codex_led_rgb_t layer_rgb(void) {
     return layer_colors[layer_index % (sizeof(layer_colors) / sizeof(layer_colors[0]))];
 }
 
+codex_led_rgb_t codex_led_layer_color(void) {
+    return layer_rgb();
+}
+
 static codex_led_rgb_t layer_indicator_rgb(uint32_t now_ms) {
     codex_led_rgb_t output = layer_rgb();
 
@@ -405,6 +416,7 @@ void codex_led_init(void) {
     layer_index = 0;
     startup_started_ms = 0;
     startup_running = false;
+    layer_transition.active = false;
     codex_led_reset_tasks(0);
 }
 
@@ -492,6 +504,42 @@ void codex_led_set_link(oai_link_state_t state, uint32_t now_ms) {
 void codex_led_set_layer(uint8_t layer, uint32_t now_ms) {
     (void)now_ms;
     layer_index = layer;
+}
+
+void codex_led_start_layer_transition(uint8_t layer, uint32_t now_ms) {
+    layer_transition.layer = layer % (sizeof(layer_colors) / sizeof(layer_colors[0]));
+    layer_transition.started_ms = now_ms;
+    layer_transition.active = true;
+}
+
+bool codex_led_render_layer_transition(uint32_t now_ms, codex_led_rgb_t output[CODEX_LED_COUNT]) {
+    uint32_t elapsed;
+    uint8_t level;
+    codex_led_rgb_t color;
+
+    if (output == NULL || !layer_transition.active) return false;
+    elapsed = (uint32_t)(now_ms - layer_transition.started_ms);
+    if (elapsed >= CODEX_LAYER_TRANSITION_TOTAL_MS) {
+        layer_transition.active = false;
+        return false;
+    }
+    if (elapsed < CODEX_LAYER_TRANSITION_FADE_IN_MS) {
+        level = (uint8_t)((elapsed * 255U + (CODEX_LAYER_TRANSITION_FADE_IN_MS / 2U)) / CODEX_LAYER_TRANSITION_FADE_IN_MS);
+    } else if (elapsed < CODEX_LAYER_TRANSITION_FADE_IN_MS + CODEX_LAYER_TRANSITION_HOLD_MS) {
+        level = 255U;
+    } else {
+        uint32_t remaining = CODEX_LAYER_TRANSITION_TOTAL_MS - elapsed;
+        level = (uint8_t)((remaining * 255U + (CODEX_LAYER_TRANSITION_FADE_OUT_MS / 2U)) / CODEX_LAYER_TRANSITION_FADE_OUT_MS);
+    }
+
+    color = layer_colors[layer_transition.layer];
+    color.r = (uint8_t)(((uint16_t)color.r * level + 127U) / 255U);
+    color.g = (uint8_t)(((uint16_t)color.g * level + 127U) / 255U);
+    color.b = (uint8_t)(((uint16_t)color.b * level + 127U) / 255U);
+    for (uint8_t index = 0; index < CODEX_LED_COUNT; ++index) {
+        output[index] = color;
+    }
+    return true;
 }
 
 void codex_led_note_action(uint8_t led_index, bool pressed, uint32_t now_ms) {

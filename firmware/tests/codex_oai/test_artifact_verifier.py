@@ -291,6 +291,7 @@ class ArtifactVerifierTest(unittest.TestCase):
             "encoder_rotation_behavior": {
                 "initial_map_readback_verified": True,
                 "initial_rotation_emitted_oai_event": True,
+                "initial_rotation_emitted_exactly_one_oai_event": True,
                 "dynamic_map_write_ack": True,
                 "programmed_clockwise_keycode": 0x52,
                 "map_readback_after_write": 0x52,
@@ -458,6 +459,17 @@ class ArtifactVerifierTest(unittest.TestCase):
                 evidence = {**self.good_dual_evidence, field: value}
                 with self.assertRaisesRegex(self.verifier.VerificationError, field):
                     self._verify(evidence=evidence, profile="dual")
+
+    def test_dual_evidence_requires_one_oai_event_per_initial_rotation(self) -> None:
+        evidence = {
+            **self.good_dual_evidence,
+            "encoder_rotation_behavior": {
+                **self.good_dual_evidence["encoder_rotation_behavior"],
+                "initial_rotation_emitted_exactly_one_oai_event": False,
+            },
+        }
+        with self.assertRaisesRegex(self.verifier.VerificationError, "encoder"):
+            self._verify(evidence=evidence, profile="dual")
 
     def test_dual_profile_rejects_missing_or_mismatched_interface_evidence(self) -> None:
         cases = (
