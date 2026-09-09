@@ -1,5 +1,11 @@
 # agentpad13 — tray base interface
 
+## Actualización de alcance — 2026-09-09
+
+El remapeo OAI de fase 3 no cambia el datum, bolsillos, apoyos ni tolerancias de las bases. Se mantienen las cotas del contrato siguiente; no se han regenerado las bases ni repetido pruebas de estabilidad en esta tarea.
+
+Referencia: [estado vigente de fase 3](../../../../../docs/PHASE-3-STATUS.md).
+
 **Design your own base.** The tray carries four pockets near its centre. Put
 four matching pegs on anything you like and it mounts. The interface does not
 care how big your base is or what shape it is.

@@ -1,5 +1,11 @@
 # agentpad13 — pre-hardware behavioral simulation
 
+## Actualización de alcance — 2026-09-09
+
+Esta simulación del firmware base conserva sus límites de fidelidad. La fase 3 cuenta además con el runner dual en `firmware/tests/emulator/dual_oai_vial_runner.cjs` y evidencia `oai-layout-20260907-*`. Los 169 intercambios RGB se comprueban en un harness C; actividad WS2812 en emulación no certifica los colores observados físicamente.
+
+Referencia: [estado vigente de fase 3](../../docs/PHASE-3-STATUS.md).
+
 Boots the **real production `.uf2`** in a headless RP2040 emulator and drives it
 the way a user would: presses every switch, turns the encoder, taps the touch
 pad, moves the joystick, and paints every LED over raw HID — then checks what

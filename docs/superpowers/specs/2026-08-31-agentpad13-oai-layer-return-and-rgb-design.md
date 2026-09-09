@@ -1,5 +1,11 @@
 # AgentPad13: return-to-OAI layer chord and layer-aware RGB
 
+## Actualización de alcance — 2026-09-09
+
+Retorno físico SW1+SW4 y transición de 1 segundo implementados; la ampliación de septiembre permite mover acciones y LED de L0 juntos. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 ## Purpose
 
 Extend the Phase-3 combined OAI + Vial firmware before work starts on the

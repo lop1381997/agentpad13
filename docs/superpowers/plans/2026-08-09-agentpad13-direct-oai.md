@@ -1,5 +1,11 @@
 # AgentPad13 Direct OAI Implementation Plan
 
+## Actualización de alcance — 2026-09-09
+
+Base Direct OAI y su renderer, anterior al target dual con Vial. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 > **Historical plan:** this records the original implementation sequence. Its
 > source locations, intermediate status, and artifact values are provenance,
 > not current instructions. The destination release is

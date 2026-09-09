@@ -1,5 +1,11 @@
 # AgentPad13 direct Codex OAI keymap
 
+## Actualización de alcance — 2026-09-09
+
+La personalización RPC y las dos capas descritas aquí corresponden a `codex_oai`, no al editor Vial de fase 3. El target `vial_oai` reutiliza código con `CODEX_OAI_DYNAMIC_KEYMAP`: ocho capas, mapa persistente Vial, retorno SW1+SW4 y proyección de colores L0 desde ese mapa. Studio nunca llama al RPC OAI ni abre su colección HID.
+
+Referencia: [estado vigente de fase 3](../../../../docs/PHASE-3-STATUS.md).
+
 `codex_oai` is an isolated laboratory keymap for checking whether Codex Desktop
 can drive an AgentPad13 directly through OAI Raw HID. It is **not** the normal
 AgentPad13 firmware and it does not change the `default` or `vial` keymaps.

@@ -56,23 +56,30 @@ stick parts. The reasoning and the measurements are in [`release/RELEASE.md`](re
 
 ### AgentPad13 Vial OAI (Phase 3)
 
-`loudest_micro:vial_oai` is the separate Phase-3 firmware: it keeps Vial's
-normal configuration flow, exposes eight editable layers and reserves a small
-OAI channel for the future native AgentPad13 application. Its candidate is
-[`agentpad13_vial_oai.uf2`](release/firmware/prebuilt/agentpad13_vial_oai.uf2),
-124,416 bytes, SHA-256
-`848e7249a3ccae3dcf8a52a25bbc1493de358f6b3c24bdb1c19aa7c8fdc49aef`.
-The [build guide](firmware/BUILD.md#agentpad13-vial-oai-phase-3-firmware-foundation)
-explains the Vial/OAI boundary; physical validation remains pending in its
-[runbook](docs/vial-oai-physical-runbook.md).
+The current Phase-3 work is published on `lop1381997/agentpad13`, branch
+`codex/phase-3` (code delivery `24d9ebd`), without merging into `main`.
+`loudest_micro:vial_oai` exposes eight Vial layers alongside the unchanged
+Codex OAI interface on separate HID collections, using VID:PID `303A:8360`.
+Studio configures Vial; Codex owns OAI.
+
+The latest test candidate adds coupled key/action/LED remapping on L0:
+[`agentpad13_oai_vial_layout_20260907.uf2`](apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2),
+125,952 bytes, SHA-256
+`8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`.
+This is not the older `agentpad13_vial_oai.uf2` single-interface prototype,
+nor the preceding `agentpad13_oai_vial_dual.uf2` candidate retained in release.
+Start with the [current status](docs/PHASE-3-STATUS.md),
+[build guide](firmware/BUILD.md) and [physical runbook](docs/dual-oai-vial-physical-runbook.md).
 
 ### AgentPad13 Desktop editor
 
 [`apps/agentpad-desktop/`](apps/agentpad-desktop/) contains the in-progress
-native Phase-3 editor for the eight Vial layers and encoder map. It is a Tauri
+native Phase-3 editor for eight Vial layers, encoder mapping, VialRGB, text macros,
+profiles, diagnostics and coupled OAI key/LED distribution. It is a Tauri
 application for macOS, Windows, and Linux that opens only the Vial HID
 collection; it neither flashes firmware nor opens the separate Codex protocol.
-See its [local guide](apps/agentpad-desktop/README.md).
+See its [local guide](apps/agentpad-desktop/README.md). Local automated checks pass;
+physical acceptance, Windows/Linux verification and final visual comparison remain open.
 
 ### AgentPad13 Direct OAI (experimental alternative)
 
@@ -85,7 +92,7 @@ ID 6, 64-byte reports).
 
 The current unflashed candidate is
 `release/firmware/prebuilt/agentpad13_codex_oai.uf2`, 93,696 bytes, SHA-256
-`a07d00d81ec47860e6d8bcf6111444bcd9d4bdac08f5f759ee4efea48298bdd9`.
+`7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
 Start with the [keymap contract](firmware/loudest_micro/keymaps/codex_oai/README.md),
 [source hand-off](firmware/CODEX-OAI-SOURCE.md), and
 [Direct OAI build procedure](firmware/BUILD.md#agentpad13-direct-oai-experimental-alternative).

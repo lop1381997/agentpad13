@@ -1,5 +1,11 @@
 # BRING-UP — first power-on
 
+## Actualización de alcance — 2026-09-09
+
+Estas instrucciones de primer encendido/calibración pertenecen al firmware base indicado abajo. Para Studio con movimiento tecla/LED, seleccionar explícitamente el candidato dual de fase 3 y seguir su runbook, no sustituir UF2 por similitud de nombre. No se han repetido pruebas eléctricas ni alterado calibración/pinout en esta revisión.
+
+Referencia: [estado vigente de fase 3](../../docs/PHASE-3-STATUS.md).
+
 **Do this once, on each newly assembled board.** It takes about five minutes.
 You need a USB cable and nothing else — no meter, no scope, no soldering, no
 software to install, and no electronics knowledge. The board calibrates itself

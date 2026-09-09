@@ -1,5 +1,11 @@
 # Implementación RPC de personalización de la capa OAI
 
+## Actualización de alcance — 2026-09-09
+
+RPC de personalización Direct OAI; Studio usa el mapa Vial, no este RPC. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 > **Plan histórico:** conserva la secuencia y los contratos de esta fase. Sus
 > artefactos intermedios están superseded por
 > `release/firmware/prebuilt/agentpad13_codex_oai.uf2` (93.696 bytes, SHA-256

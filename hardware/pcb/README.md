@@ -1,5 +1,11 @@
 # agentpad13 — PCB (v5, complete)
 
+## Actualización de alcance — 2026-09-09
+
+La fase 3 añade app y firmware, no una nueva revisión de PCB. Se mantiene la referencia v5_7 de este documento; no se han regenerado Gerbers, BOM ni CPL en esta tarea. Cambiar SW1 por SW7 en Studio es una asignación lógica y no requiere modificar la placa o su pinout.
+
+Referencia: [estado vigente de fase 3](../../docs/PHASE-3-STATUS.md).
+
 Finished, fabrication-ready 2-layer RP2040 macropad PCB. Designed in **KiCad 9**.
 
 - **Outline:** 84.2 × 100 mm octagon (chamfered), 1.6 mm FR-4, 2 layers.

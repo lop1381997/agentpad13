@@ -1,5 +1,24 @@
 # Evidence files
 
+## Current Phase-3 layout candidate — 2026-09-09 documentation
+
+`oai-layout-20260907-manifest.json` and `oai-layout-20260907-emulator.json`
+refer to `apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2`,
+125952 bytes, SHA-256
+`8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`.
+The static verifier proves ELF/UF2 equivalence and USB descriptors; the emulator
+proves protocol isolation and input behavior, with synthetic configuration
+recovery explicitly excluded from descriptor proof. Actual LED permutations
+are covered by the compiled C harness, not physical RGB capture.
+The complete host suite passed 175 tests on 2026-09-09; hardware acceptance
+is still pending. See [Studio verification](../../apps/agentpad-desktop/VERIFICATION.md).
+
+## Preserved target-specific evidence
+
+“Current” in the filenames below means current for that preserved artifact
+lineage, not the latest Phase-3 layout build. Never pair their hashes with the
+new UF2 or overwrite a historical capture to make it appear newly validated.
+
 `codex-oai-emulator.json` is the current emulator capture for the direct
 transport, `release/firmware/prebuilt/agentpad13_codex_oai.uf2`. It must match
 the UF2 SHA-256 and byte size recorded in `codex-oai-current-manifest.json`.
@@ -7,8 +26,8 @@ The current port rebuild is 93,696 bytes with SHA-256
 `7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
 
 `dual-oai-vial-emulator.json` is the current Task-5 capture for
-`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`. It proves the
-three-interface descriptor, the exact Vial `FF60:61` and OAI `FF00:61`
+`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`. Together with its
+static verifier manifest it documents the three-interface descriptor and exact Vial `FF60:61` and OAI `FF00:61`
 contracts, exact compiled endpoint address set (`0x85`, `0x81`/`0x02`,
 `0x83`/`0x04`), shared keyboard/joystick press/release and axis behavior,
 runtime Vial encoder-map readback/write/rotation behavior, both protocol paths,

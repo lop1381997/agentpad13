@@ -1,5 +1,17 @@
 # Distribución conjunta OAI de teclas y LEDs
 
+## Estado — 2026-09-09
+
+Los puntos 1–3 están implementados y verificados mediante harness C (169
+permutas), Vitest y WebKit con HID simulado. Se han compilado app y UF2;
+el emulador dual y el verificador ELF/UF2 tienen evidencia específica.
+El código se subió a `codex/phase-3` en `24d9ebd`, tras autorización posterior
+a este plan. El punto 4 está entregado como archivo, sin flash ni merge;
+su aceptación con agentes reales sigue pendiente. Guía y firmware:
+[OAI-LAYOUT.md](../../../apps/agentpad-desktop/OAI-LAYOUT.md).
+
+## Diseño y tareas originales
+
 La UI configura el mapa Vial persistente de L0. El firmware proyecta el frame
 lógico OAI sobre SW1–SW13 leyendo ese mismo mapa: no hay una segunda tabla que
 pueda desincronizarse de la acción. Se mantienen VID/PID, report IDs y tramas.

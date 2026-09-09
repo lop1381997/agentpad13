@@ -1,5 +1,11 @@
 # Linux access
 
+## Actualización de alcance — 2026-09-09
+
+Las instrucciones siguientes preparan permisos, no demuestran que Linux haya sido validado. El workflow de macOS/Windows/Linux está publicado en `codex/phase-3`; sus resultados no se han comprobado aquí. Instala primero las dependencias Linux indicadas en `.github/workflows/agentpad-desktop.yml` y compila desde el directorio de la app. La regla udev limita VID/PID; es el backend quien restringe además la colección Vial, sin abrir OAI.
+
+Referencia: [estado vigente de fase 3](../../../docs/PHASE-3-STATUS.md).
+
 The desktop editor uses the AgentPad13 Vial HID collection. If your account
 cannot open the pad, install the included scoped udev rule once:
 

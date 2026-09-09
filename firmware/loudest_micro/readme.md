@@ -1,5 +1,11 @@
 # agentpad13
 
+## Actualización de alcance — 2026-09-09
+
+El nombre QMK sigue siendo `loudest_micro`. La fase 3 se compila con keymap `vial_oai` y se configura mediante Studio; `codex_oai` es la alternativa sin Vial. El pinout y la colocación física aquí descritos no cambian al permutar acciones OAI: el firmware redistribuye los colores lógicos, no la matriz eléctrica.
+
+Referencia: [estado vigente de fase 3](../../docs/PHASE-3-STATUS.md).
+
 Open-hardware agent macropad (Rev A, RP2040). 13 keys (12x 1U grid + 1x 2U
 hero), EC11 encoder with push, planar analog joystick, TTP223 touch pad, and
 24 addressable LEDs (13 per-key + 1 layer indicator + 10 underglow) driven as

@@ -1,5 +1,11 @@
 # agentpad13 case v2 — plate-as-deck over the v4_r27 octagon
 
+## Actualización de alcance — 2026-09-09
+
+Registro histórico de carcasa, con decisiones y medidas conservadas. Studio permite cambiar la distribución lógica de acciones y luces, no la posición de teclas o aperturas físicas. Esta revisión solo anota documentación: no regenera STL/STEP ni acredita nuevas pruebas mecánicas.
+
+Referencia: [estado vigente de fase 3](../../../../docs/PHASE-3-STATUS.md).
+
 Built 2026-07-18 against the FROZEN board `hardware/pcb/v4/v4_r27.kicad_pcb`
 (md5 `af5ad274558fc034d2d098a72d423a25`, verified this session). The board was
 not touched. **Gate: PASS — case 62/62 assertions, coupons 15/15, zero

@@ -67,20 +67,23 @@ The app does not inspect HID devices until you press **Buscar AgentPad13**.
   after errors. A failed multi-key group can have partially reached the device:
   retrying writes the same intended values and verifies them again.
 
-This Studio update does not itself require flashing firmware if the device already
-runs the compatible eight-layer OAI/Vial build with VialRGB and dynamic macros.
-It does not modify the OAI HID protocol.
+Basic editing does not require a reflash when the device already runs compatible
+eight-layer dual OAI/Vial firmware with VialRGB and dynamic macros. However,
+**coupled OAI key and LED movement requires the new layout firmware** documented
+in [OAI-LAYOUT.md](OAI-LAYOUT.md). In Mapa de teclas → L0, choose horizontal,
+vertical or a two-key swap; review the draft and save. Presets restore the 13
+canonical actions; swaps preserve displaced assignments. Neither changes OAI HID.
 
-## Verification on 2026-09-07
+## Verification recorded through 2026-09-09
 
-31 frontend tests and 30 Rust tests pass. Clippy passes with warnings denied.
-TypeScript and the macOS debug app bundle
-build successfully. The UI uses the supplied Stitch HTML's local design tokens
-and bundled fonts. Browser visual comparison and physical keyboard acceptance
-have not been performed. Export now uses a native save dialog through Tauri,
-with cancellation and error handling tested at the UI boundary.
-Windows/Linux builds and native file export on those
-platforms still need platform verification.
+34 frontend tests and 30 Rust tests passed on September 9, together with
+TypeScript/Vite and 175 firmware tests. Clippy and the macOS debug bundle passed
+in the preceding verification. WebKit flows passed using a simulated device;
+final source-to-render visual comparison and physical acceptance remain open.
+Native macOS Diagnostics export was verified using the real Save dialog on
+September 8. Windows/Linux builds and native dialogs remain unverified here.
+The cross-platform workflow is now published on `codex/phase-3`; publication
+alone is not evidence of CI success. See [VERIFICATION.md](VERIFICATION.md).
 
 Physical acceptance: connect and unlock; remap one spare key and both encoder
 directions; save and reconnect to verify persistence; test a text macro; adjust
@@ -88,6 +91,11 @@ VialRGB on L1 and confirm L0 lighting remains unchanged; export/import a profile
 finally lock editing and disconnect. Keep Codex open to check OAI coexistence.
 
 ## Verify and bundle
+
+The source icon is `src-tauri/icons/agentpad.svg`. Regenerate platform assets
+with `pnpm tauri icon src-tauri/icons/agentpad.svg --output src-tauri/icons`.
+The PNG, ICO and ICNS outputs must also be listed in `bundle.icon` in
+`src-tauri/tauri.conf.json`; having them on disk alone is insufficient.
 
 ~~~sh
 pnpm test --run

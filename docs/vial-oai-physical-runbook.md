@@ -1,5 +1,11 @@
 # AgentPad13 Vial OAI — physical verification runbook
 
+## Actualización de alcance — 2026-09-09
+
+Procedimiento histórico del prototipo Vial OAI de una interfaz (`0xA6`, VID:PID `FEED:4C4D`). No usar ese candidato para comprobar la integración actual con Codex. La prueba vigente de fase 3 usa dual HID `303A:8360` y está en `docs/dual-oai-vial-physical-runbook.md`.
+
+Referencia: [estado vigente de fase 3](PHASE-3-STATUS.md).
+
 This runbook is for the future, after the Vial OAI artifact has passed its
 isolated build, emulator smoke and artifact-verifier gates. It contains no
 automatic installation action.

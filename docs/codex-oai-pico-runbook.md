@@ -1,5 +1,11 @@
 # AgentPad13 direct OAI en Raspberry Pi Pico (RP2040)
 
+## Actualización de alcance — 2026-09-09
+
+Esta guía de cableado/pruebas en Pico pertenece al firmware Direct OAI. No es una instrucción para flashear Studio ni una validación de la placa AgentPad13. La fase 3 dual conserva el contrato OAI, pero su mapa Vial y la proyección de LEDs tienen candidato y procedimiento propios.
+
+Referencia: [estado vigente de fase 3](PHASE-3-STATUS.md).
+
 Este montaje permite validar el firmware `loudest_micro:codex_oai` antes de
 recibir la placa AgentPad13. La Pico se usa como banco de entradas: cada
 entrada tiene pull-up interno y una pinza que la une momentáneamente a GND

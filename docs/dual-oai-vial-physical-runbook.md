@@ -1,15 +1,15 @@
 # AgentPad13 dual OAI + Vial physical test runbook
 
-This is a gated manual test for the local Task-5 candidate. No physical row is
+This is a gated manual test for the Phase-3 coupled-layout candidate. No physical row is
 validated until the tester records the result, date, host OS and device serial
 or board identifier below. The automated build, emulator and verifier do not
 authorize a flash or reset.
 
 ## Candidate and authorization
 
-- UF2: `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`
-- Size: **125440 bytes**
-- SHA-256: `d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18`
+- UF2: `apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2`
+- Size: **125952 bytes**
+- SHA-256: `8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`
 - Vial definition: `release/firmware/prebuilt/agentpad13_oai_vial_dual.vial`
 - recovery UF2: `release/firmware/prebuilt/agentpad13_reference.uf2`
 - Recovery size: **93696 bytes**
@@ -17,7 +17,7 @@ authorize a flash or reset.
 
 Before each physical flash, obtain and retain this literal authorization:
 
-> I authorize one BOOTSEL flash of `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2` on board `<board id>`, after verifying SHA-256 `d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18` and size 125440 bytes. I understand this is a local, physically unvalidated candidate and authorize no other device operation.
+> I authorize one BOOTSEL flash of `apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2` on board `<board id>`, after verifying SHA-256 `8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda` and size 125952 bytes. I understand this candidate is not yet physically validated and authorize no other device operation.
 
 Recovery requires a separate authorization, obtained only if the candidate
 fails to enumerate or is otherwise unsafe to continue testing:
@@ -26,7 +26,8 @@ fails to enumerate or is otherwise unsafe to continue testing:
 
 ## Flash and recovery
 
-1. Verify the candidate path, byte size and SHA-256 above.
+1. Export the current Studio profile as a backup. Verify the candidate path,
+   byte size and SHA-256 above. Preserve a known working firmware separately.
 2. Disconnect the board. Hold **BOOTSEL** while connecting USB, then wait for
    the `RPI-RP2` volume.
 3. Copy only the authorized dual UF2 to `RPI-RP2` and wait for the volume to
@@ -92,6 +93,28 @@ Load the local `.vial` definition from the candidate path above. Hold **SW1
   connected.
 
 ## Physical record
+
+### Studio and coupled-layout acceptance
+
+With Codex and Studio open, unlock Vial and prepare an SW1 ↔ SW7 swap in
+Mapa de teclas → L0 → Distribución OAI. Before saving, the device must remain
+unchanged. After saving, verify that each LED follows the agent/action now
+assigned to that position, and each key opens or acts on the corresponding agent.
+Undo/redo affects local drafts; it is not an automatic rollback of device writes.
+
+Repeat with vertical layout (AG00 at SW1, AG01 at SW5, AG02 at SW9). Presets
+restore all 13 canonical OAI actions; they are not a rotation of arbitrary custom
+bindings. Export/import the profile, save explicitly and confirm the same layout.
+Check that TP5, the encoder and underglow positions have not been swapped.
+
+Finally **Bloquear edición → Desconectar → unplug/reconnect** and confirm normal
+keyboard input, persisted mappings, Codex operation and ability to connect again.
+This specifically retests the reported lock/disconnect failure. Do not lock or
+disconnect during an in-progress unlock; resume polling when requested by Studio.
+
+Record board, encoder observations, firmware SHA, OS, app revision, each result
+and any recovery used. Prior user feedback about older builds does not establish
+physical acceptance of this exact UF2. Test Windows/Linux separately.
 
 | Date / host | Board ID | Result | Notes |
 |---|---|---|---|

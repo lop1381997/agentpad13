@@ -1,5 +1,11 @@
 # Codex OAI startup LED check implementation plan
 
+## Actualización de alcance — 2026-09-09
+
+Autodiagnóstico LED de arranque. El remapeo de colores nuevo se aplica fuera del arranque y la transición. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 > **Historical plan:** this preserves the startup-check implementation record.
 > Its then-current artifact path and values are superseded by
 > `release/firmware/prebuilt/agentpad13_codex_oai.uf2` (93,696 bytes, SHA-256

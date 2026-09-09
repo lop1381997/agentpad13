@@ -1,5 +1,11 @@
 # Protocol v1 — joystick calibration commands (CONTRACT, 2026-08-15)
 
+## Actualización de alcance — 2026-09-09
+
+Este contrato describe la calibración y el protocolo base de AgentPad13; no debe usarse como formato del canal Codex. En fase 3, Studio usa Vial `FF60:0061` (32 bytes sin report ID) y Codex conserva OAI `FF00:0061` (64 bytes, report ID 6), ambos con VID:PID `303A:8360`. La distribución tecla/LED no añade comandos de calibración ni cambia este contrato.
+
+Referencia: [estado vigente de fase 3](PHASE-3-STATUS.md).
+
 This file is the **single source of truth** both public implementations are written
 against: `firmware/loudest_micro/loudest_micro.c` (device) and
 `firmware/tests/conformance/protocol_oracle.py` (dependency-free host oracle).

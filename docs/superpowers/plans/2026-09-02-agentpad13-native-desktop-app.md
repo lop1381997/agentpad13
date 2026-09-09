@@ -1,5 +1,11 @@
 # AgentPad13 Native Desktop App Implementation Plan
 
+## Actualización de alcance — 2026-09-09
+
+MVP implementado y ampliado con RGB, macros, perfiles, exportación y distribución OAI. Sus no-objetivos describen el alcance inicial, no todas las funciones actuales. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans inline, task by task. Do not spawn subagents: the project owner explicitly requested work in this task.
 
 **Goal:** Build the first native AgentPad13 desktop editor for the eight

@@ -1,5 +1,11 @@
 # V5-NOTES — corrected board lineage (started fresh 2026-07-19, evening)
 
+## Actualización de alcance — 2026-09-09
+
+Ledger histórico de la placa: conservar revisiones y resultados fechados. La fase 3 modifica firmware y Studio, no la PCB v5_7, sus nets, BOM o CPL. No interpretar antiguos estados de pedido como instrucciones nuevas ni la verificación software como una nueva aprobación de fabricación.
+
+Referencia: [estado vigente de fase 3](../../../docs/PHASE-3-STATUS.md).
+
 Predecessor v5 attempt discarded in full → `v5-discarded/` (owner order; kept as evidence).
 This v5 = **v4_r27 + the RE1 block move**, executed per `hardware/pcb/v4/RE1-MOVE-CHARTER.md`
 and the owner's block-shift doctrine (poo3-1/2/3, poo4 — rigid cluster move, straight shears,

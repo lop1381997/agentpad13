@@ -1,5 +1,11 @@
 # FIRMWARE POLARITY NOTE — YA13 joystick axis sense (v5)
 
+## Actualización de alcance — 2026-09-09
+
+La fase 3 no modifica la orientación física YA13 ni las decisiones de polaridad de este documento. El remapeo de teclas/LEDs no calibra ni invierte ejes. Las comprobaciones de joystick en emulador no sustituyen la comprobación de sentido en la placa real.
+
+Referencia: [estado vigente de fase 3](../docs/PHASE-3-STATUS.md).
+
 **TL;DR:** Both joystick axes' *direction sense* are inverted versus the YTL
 YA13 datasheet datum because the part is mounted **180° clocked** from the
 datasheet datum on the v5 board (pot bodies face West + North instead of the

@@ -1,6 +1,22 @@
-# Studio acceptance — 2026-09-08
+# Studio acceptance — 2026-09-09
 
 ## Proven locally
+
+### Icon packaging follow-up — 2026-09-09
+
+CI run [34350440436](https://github.com/lop1381997/agentpad13/actions/runs/34350440436)
+was inspected after the first publication. Frontend tests, frontend builds and
+Rust tests passed on all three operating systems. macOS packaging passed;
+Windows MSI failed to find an ICO and Linux AppImage failed to find a square
+icon, after both applications compiled. The icons existed, but `bundle.icon`
+was missing from Tauri configuration.
+
+Platform assets have now been regenerated from `icons/agentpad.svg` and
+explicitly configured locally. A regression test checks configured assets,
+square PNG dimensions and ICO/ICNS headers; it failed before the configuration
+fix and passes afterwards. The local frontend suite now passes 35 tests.
+This fix has not yet been pushed or validated by a new remote CI run.
+The earlier observations below retain their original verification dates.
 
 - React/Vitest: 34 tests in 13 files pass.
 - Rust: 28 protocol/session tests plus two real-filesystem export tests pass.
@@ -12,8 +28,8 @@
   `/Users/hirlu/Documents/agentpad13-native-export-check-20260908.txt`
   was read back and contains the expected UTF-8 diagnostic report.
 - Rust's 30 tests and Clippy with warnings denied rechecked on 2026-09-08.
-- Fresh macOS bundle launch succeeds via Launch Services; the new process
-  (PID 61014) remains running. An existing instance was left untouched.
+- A macOS bundle launch via Launch Services succeeded in the recorded smoke test.
+  An existing instance was left untouched; this is not a current process-status claim.
   This is a startup smoke check, not evidence of rendered UI correctness.
 - Storage tests cover denied reads and recovery of valid entries beside a corrupt profile.
 - Export filesystem tests verify UTF-8 round trip, replacement of existing content
@@ -32,8 +48,8 @@
   macOS returned "could not create image from window". No screenshot was obtained.
 - Connected keyboard: save/readback across USB reconnect, encoder behavior,
   LED effects, macro execution and simultaneous Codex OAI operation.
-- Windows and Linux CI/build execution. The matrix workflow exists locally;
-  it has not been published or run as part of this task.
+- Successful Windows/Linux packaging after the local icon fix. The original
+  published workflow failed at the packaging steps documented above.
   Docker exists outside PATH in Docker.app; Linux execution has not been verified.
 
 The automated UI tests mock the export boundary. The separate native macOS
@@ -47,5 +63,6 @@ The goal must not be marked complete while these acceptance items remain open.
 The new firmware compiles to the separate UF2 documented in OAI-LAYOUT.md.
 Its dual-channel emulator and ELF/UF2 descriptor verifier pass; evidence is in
 firmware/evidence/oai-layout-20260907-{emulator,manifest}.json.
-174 existing firmware tests passed; the new compiled-C layout test also passes
-as part of test_rgb_cap.py (169 swaps and fixed reserved LEDs).
+The complete firmware suite passed on 2026-09-09: 175 tests, including the
+compiled-C layout test in test_rgb_cap.py (169 swaps and fixed reserved LEDs).
+The same pre-push run passed 34 frontend tests, 30 Rust tests and TypeScript/Vite.

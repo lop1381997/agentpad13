@@ -1,5 +1,11 @@
 # AgentPad13 direct OAI audit — 2026-08-17
 
+## Actualización de alcance — 2026-09-09
+
+Auditoría histórica del firmware Direct OAI, no del editor Studio ni del nuevo UF2 dual. Se conservan observaciones y hashes por trazabilidad. La versión de fase 3 añade Vial y distribución conjunta tecla/LED con evidencia separada; no atribuirle aprobación física a partir de este informe.
+
+Referencia: [estado vigente de fase 3](PHASE-3-STATUS.md).
+
 > **Historical audit:** this dated record preserves the conclusions and
 > candidate facts observed during the original AgentPad13 work. Its artifact
 > values are superseded. The current destination release is

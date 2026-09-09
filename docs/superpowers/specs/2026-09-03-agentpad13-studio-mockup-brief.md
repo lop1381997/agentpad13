@@ -1,5 +1,11 @@
 # AgentPad13 Studio — brief visual para mockup
 
+## Actualización de alcance — 2026-09-09
+
+Brief visual de referencia; el HTML de Stitch suministrado se usa como base. La interfaz y sus flujos están implementados, pero queda cerrar la comparación visual completa. El panel Distribución OAI de L0 es una ampliación posterior. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 **Estado:** dirección visual aprobada el 2026-09-03. Autoriza la implementación de la aplicación; no autoriza cambios de firmware, flasheo ni acceso al canal OAI.
 
 **Fuente visual aprobada:** exportación HTML de Stitch entregada por la persona propietaria el 2026-09-03. Su sistema visual de estudio oscuro, barra lateral, cabecera densa, panel físico central e inspector se reutiliza como referencia. Los elementos que contradicen el hardware real se reconcilian con este documento: no hay tira táctil de 100 mm, encoder óptico, OLED, telemetría inventada, hooks directos de Codex ni controles físicos del chasis.

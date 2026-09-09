@@ -1,5 +1,11 @@
 # Vendored: three.js
 
+## Actualización de alcance — 2026-09-09
+
+La fase 3 no actualiza three.js ni los archivos vendorizados. Este registro de procedencia corresponde al configurador 3D de fabricación, no al editor nativo Studio. Se mantienen versiones, licencias y comandos de verificación; no se presenta su resultado histórico como una nueva ejecución.
+
+Referencia: [estado vigente de fase 3](../../../../docs/PHASE-3-STATUS.md).
+
 Pinned so the published site makes **zero external requests at runtime**. Nothing
 here is fetched from a CDN; everything the viewer needs is in this directory.
 

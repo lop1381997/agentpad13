@@ -1,5 +1,11 @@
 # AgentPad13 direct-OAI source snapshot
 
+## Actualización de alcance — 2026-09-09
+
+Este inventario corresponde a la alternativa Direct OAI. El desarrollo activo de fase 3 está en `lop1381997/agentpad13`, rama remota `codex/phase-3` (`24d9ebd`), e incorpora el target dual `vial_oai` y Studio. El UF2 Direct OAI de este documento no ofrece el editor Vial; el nuevo layout usa el binario específico de la guía de fase 3.
+
+Referencia: [estado vigente de fase 3](../docs/PHASE-3-STATUS.md).
+
 This directory is the buildable source hand-off for the AgentPad13 Direct OAI
 firmware. The original snapshot came from the `agentpad13-direct-oai` worktree
 on branch `dev`, based at commit

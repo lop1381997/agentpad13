@@ -1,5 +1,11 @@
 # AgentPad13 Dual-HID OAI + Vial Implementation Plan
 
+## Actualización de alcance — 2026-09-09
+
+Separación Vial/OAI implementada; el layout posterior mantiene VID/PID, interfaces y tramas. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a single AgentPad13 UF2 that keeps the exact deployed Codex

@@ -1,5 +1,11 @@
 # Dual OAI + Vial Review-Round-1 Remediation Implementation Plan
 
+## Actualización de alcance — 2026-09-09
+
+Remediaciones del candidato dual anterior; el layout posterior tiene evidencia separada. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the five review findings on the existing local dual-HID candidate without changing the OAI wire contract or performing hardware/remote operations.

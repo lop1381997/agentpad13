@@ -1,5 +1,11 @@
 # v5-release-compiled — release checkpoint (2026-07-20, band default updated 2026-07-24, SW14/15 BOM corrected 2026-08-05, board refreshed to v5_7 2026-08-19, plate encoder opening widened 2026-08-19, band plate-pocket fit corrected 2026-08-19, tray bases published 2026-08-20, base catalog finalised 2026-08-20)
 
+## Actualización de alcance — 2026-09-09
+
+Este checkpoint describe el paquete de hardware/firmware base. La entrega de software de fase 3 se publicó aparte en `codex/phase-3` (`24d9ebd`), sin merge. No se ha regenerado fabricación ni cambiado CAD. El UF2 nuevo de distribución OAI está en el árbol de la app y no sustituye silenciosamente los candidatos de este paquete.
+
+Referencia: [estado vigente de fase 3](../docs/PHASE-3-STATUS.md).
+
 Self-contained snapshot of the v5 deliverables. Every file here is a **COPY**;
 the originals remain in their working locations. This bundle mirrors the
 `v4-release-compiled/` (Rev A) pattern, scoped to the v5 diff. Companion

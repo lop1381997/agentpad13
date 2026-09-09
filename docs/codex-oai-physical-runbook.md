@@ -1,5 +1,11 @@
 # AgentPad13 direct OAI — physical verification runbook
 
+## Actualización de alcance — 2026-09-09
+
+Este procedimiento sigue siendo exclusivo de `codex_oai` (Direct OAI sin Vial). Para probar Studio y el movimiento conjunto tecla/LED usar `docs/dual-oai-vial-physical-runbook.md` y su candidato de 125952 bytes. No intercambiar sus UF2 ni usar una autorización para otro artefacto.
+
+Referencia: [estado vigente de fase 3](PHASE-3-STATUS.md).
+
 This runbook is for the future, after the direct-OAI artifact has passed its
 isolated build, emulator smoke and artifact-verifier gates. It deliberately
 contains no automatic installation action. Do not proceed from this document

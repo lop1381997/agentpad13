@@ -1,5 +1,11 @@
 # AgentPad13 OAI return chord and VialRGB ownership Implementation Plan
 
+## Actualización de alcance — 2026-09-09
+
+Retorno físico SW1+SW4, RGB por propietario y transición de 1 segundo implementados. El indicador de capa queda fuera de VialRGB después de la transición. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **User constraint:** execute this plan inline in this thread. Do not launch

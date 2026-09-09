@@ -1,5 +1,11 @@
 # AgentPad13: OAI and Vial on dual raw-HID interfaces
 
+## Actualización de alcance — 2026-09-09
+
+Separación Vial/OAI implementada; el layout posterior mantiene VID/PID, interfaces y tramas. El contenido original se conserva como plan/especificación histórica; no se marcan como ejecutadas pruebas físicas que siguen pendientes. Estado de código: `24d9ebd` en `codex/phase-3`, sin merge.
+
+Referencia: [estado vigente de fase 3](../../PHASE-3-STATUS.md).
+
 ## Purpose
 
 Deliver one AgentPad13 firmware that preserves the existing Codex Desktop

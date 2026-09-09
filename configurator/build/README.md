@@ -1,5 +1,11 @@
 # agentpad13 configurator — data pipeline
 
+## Actualización de alcance — 2026-09-09
+
+Este pipeline genera datos y geometría para el configurador de fabricación; no configura teclas, capas ni LEDs del dispositivo. Ese editor es ahora AgentPad13 Studio, en `apps/agentpad-desktop/`. La fase 3 no ha regenerado las mallas ni cambiado los contratos de coordenadas documentados aquí.
+
+Referencia: [estado vigente de fase 3](../../docs/PHASE-3-STATUS.md).
+
 Generates the four data files and the viewer meshes the site consumes. Every
 byte is derived from artifacts that ship in `release/`; nothing is re-run
 through CAD and nothing is typed in by hand.

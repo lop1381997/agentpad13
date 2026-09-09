@@ -1,5 +1,11 @@
 # Project-local footprint libraries
 
+## Actualización de alcance — 2026-09-09
+
+Sin actualización de huellas ni dependencias por la fase 3. Los README de MX_V2 y marbastlib son documentación upstream y se conservan sin reescribir sus licencias o afirmaciones técnicas. La personalización OAI se resuelve en firmware/app, no añadiendo huellas ni cambiando estos commits.
+
+Referencia: [estado vigente de fase 3](../../../docs/PHASE-3-STATUS.md).
+
 Vendored footprint libraries for `agentpad13`. These are committed into the repo as
 **project-local libs** (standard for open keyboards); nested `.git` directories were removed
 after recording the commit hashes below. Registered in

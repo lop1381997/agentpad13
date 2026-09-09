@@ -1,5 +1,11 @@
 # Task 5 implementation report
 
+## Actualización de alcance — 2026-09-09
+
+Informe histórico de Task 5 y sus rondas de revisión. Sus hashes y resultados pertenecen al candidato dual anterior; la proyección conjunta tecla/LED se añadió después. La entrega de código de fase 3 está en `codex/phase-3`, commit `24d9ebd`, sin merge ni aceptación física del nuevo UF2.
+
+Referencia: [estado vigente de fase 3](../../../docs/PHASE-3-STATUS.md).
+
 Status: complete; local candidate prepared for the focused local commit; no
 push, merge or hardware operation.
 

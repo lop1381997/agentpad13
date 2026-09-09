@@ -10,17 +10,22 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-03-agentpad13-studio-mockup-brief.md`
 
-## Execution status — 2026-09-07
+## Execution status — 2026-09-09
 
 Tasks 1–6 are integrated in the native app: Studio shell, eight-layer editor,
 undo/redo, safe lock/disconnect, global VialRGB, conservative text macros,
 local profiles, diagnostics and accessibility settings. Existing PadLayout
 and UnlockPanel components were reused instead of renamed.
-Task 7 automated verification: 25 frontend tests and 28 Rust tests pass;
-TypeScript/Vite and macOS debug app bundle build successfully.
-Remaining acceptance: visual comparison with the supplied Stitch source,
-physical-device checks, Windows/Linux builds and native file-export checks.
-No firmware flashing or git publication was performed.
+Task 7 automated verification: 34 frontend tests and 30 Rust tests passed on
+September 9, as did TypeScript/Vite and 175 firmware tests. The macOS debug
+bundle and Clippy passed previously; native macOS diagnostic export was verified
+September 8. WebKit flows pass with mocked HID. Coupled OAI layout is integrated
+under the September 7 extension plan and requires its new firmware for LED movement.
+Remaining acceptance: complete visual comparison with the supplied Stitch source,
+physical-device checks, Windows/Linux execution and native dialogs there.
+Code was published as `24d9ebd` to `codex/phase-3`. No merge or firmware flash occurred.
+The original constraints and task recipes below are historical scope; later
+explicit owner approvals authorized the layout firmware and branch publication.
 
 ## Global Constraints
 

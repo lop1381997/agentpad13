@@ -1,5 +1,11 @@
 # FIRMWARE-V4-NOTES — agentpad13 Rev A firmware wave (board v4_r27)
 
+## Actualización de alcance — 2026-09-09
+
+Registro de la revisión v4 conservado por procedencia; no es el estado de aceptación actual de fase 3 ni una nueva validación de hardware. La rama dual/Studio añade ocho capas, separación HID y proyección tecla/LED sobre la placa pública v5_7, sin modificar aquí los resultados originales.
+
+Referencia: [estado vigente de fase 3](../docs/PHASE-3-STATUS.md).
+
 > **Historical ledger.** This file preserves the v4/v5_6 verification record,
 > including names of private working-tree ledgers that were not published. For
 > the current public state use `firmware/BUILD.md`, the definitive table in

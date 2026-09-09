@@ -1,0 +1,110 @@
+# Fase 3 — estado y guía de navegación
+
+Actualizado el 2026-09-09. Este documento reúne el estado vigente; los planes,
+auditorías y registros fechados conservan las decisiones y pruebas de su momento.
+No se deben interpretar sus candidatos antiguos como el firmware recomendado
+para probar las nuevas funciones de Studio.
+
+## Repositorio y entrega
+
+- Repositorio de trabajo: [lop1381997/agentpad13](https://github.com/lop1381997/agentpad13).
+- Rama remota de entrega: [codex/phase-3](https://github.com/lop1381997/agentpad13/tree/codex/phase-3).
+- Última entrega de código confirmada: `24d9ebd`, subida el 2026-09-09.
+- Rama local de desarrollo: `codex/oai-vial-eight-layers`.
+- No se ha hecho merge en `main`. Esta revisión documental es posterior a esa entrega.
+- No se ha flasheado el teclado durante la preparación de esta entrega.
+
+## Qué está implementado
+
+Studio usa Tauri 2, Rust/HIDAPI y React/TypeScript. Es una aplicación de escritorio
+con webview del sistema; no una interfaz SwiftUI ni un editor web con WebHID.
+macOS tiene paquete de depuración compilado y comprobación de exportación nativa.
+Windows y Linux son objetivos del proyecto, con CI configurada, pero su resultado
+de ejecución no se ha comprobado en esta tarea.
+
+- Ocho capas Vial persistentes, mapa de teclas y ambos sentidos del encoder.
+- Borradores, deshacer/rehacer y guardado explícito con lectura de comprobación.
+- VialRGB global compartido por L1–L7: efecto, velocidad, tono, saturación y brillo.
+- Dieciséis macros Vial: edición de texto ASCII imprimible; se conservan las
+  secuencias avanzadas, pero su autoría visual no está implementada.
+- Perfiles locales, duplicación, comparación e importación/exportación JSON.
+- Diagnóstico, exportación nativa y ajuste local de alto contraste.
+- En L0, distribución horizontal/vertical de las 13 acciones OAI y permuta
+  de dos posiciones, manteniendo unidos la acción y su LED.
+
+## Contrato que no cambia
+
+| Canal | Identidad | Informes | Propietario |
+|---|---|---|---|
+| Vial | VID:PID `303A:8360`, usage `FF60:0061` | 32 bytes, sin report ID | Studio o Vial |
+| OAI | Mismo VID:PID, usage `FF00:0061` | 64 bytes, report ID `6` | Codex |
+
+Studio no abre el canal OAI. La distribución se guarda en el mapa Vial de L0;
+el firmware consulta ese mismo mapa para colocar los colores. No hay una segunda
+tabla independiente de LEDs ni cambios en las tramas de Codex.
+
+`SW1 + SW4` vuelve a L0 desde cualquier capa (ventana física de 80 ms).
+`SW1 + SW13` es el desbloqueo de Vial, solo durante su procedimiento específico.
+No se deben confundir ambas combinaciones. Los remapeos no cambian el acorde
+físico de retorno.
+
+Al cambiar de capa se aplica una transición de **1 segundo** a toda la cadena:
+250 ms de entrada, 500 ms de mantenimiento y 250 ms de salida. Después, L0
+muestra OAI y L1–L7 recuperan VialRGB. El LED físico de índice 13, junto a TP5,
+queda fijo con el color de capa en L1–L7, fuera del efecto VialRGB; sí participa
+en la transición. L3 incluye controles RGB por defecto en un mapa nuevo/reset;
+una EEPROM existente no se sobrescribe para introducirlos.
+
+## Firmware para probar tecla + luz
+
+Usar [agentpad13_oai_vial_layout_20260907.uf2](../apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2):
+
+- Tamaño: **125952 bytes**.
+- SHA-256: `8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`.
+- Compilado contra QMK fijado en `00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb`,
+  con Arm GNU 15.2.Rel1 y los parches del proyecto.
+- Evidencia: [manifiesto ELF/UF2](../firmware/evidence/oai-layout-20260907-manifest.json)
+  y [emulador dual](../firmware/evidence/oai-layout-20260907-emulator.json).
+
+El archivo `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2` es el candidato
+anterior de 125440 bytes: se conserva con sus hashes y evidencia propios, pero
+no contiene la nueva proyección de LEDs. El aún más antiguo
+`agentpad13_vial_oai.uf2` usa el transporte `0xA6` obsoleto y no es compatible
+con el contrato dual actual. `agentpad13_codex_oai.uf2` es la alternativa Direct
+OAI sin Vial. El firmware base `agentpad13.uf2` y los archivos de fabricación
+siguen documentados por separado; no han sido sustituidos por este candidato.
+
+## Evidencia y pendientes
+
+Resultados del 2026-09-09: **34 tests frontend, 30 Rust y 175 firmware**, todos
+correctos, además de TypeScript/Vite. Clippy y el paquete macOS se comprobaron
+previamente. WebKit cubre los flujos con HID simulado. El 2026-09-08 se exportó
+un diagnóstico real mediante el diálogo Guardar de macOS.
+
+El harness C comprueba 169 permutas de teclas y los LEDs reservados. El emulador
+comprueba comunicaciones y actividad WS2812, no colores físicos. Su recuperación
+sintética de descriptor no constituye prueba de descriptor de configuración:
+esa prueba corresponde al verificador estático del ELF.
+
+Pendientes antes de cerrar fase 3:
+
+1. Exportar perfil y probar el nuevo firmware en el teclado real, con autorización.
+2. Probar SW1 ↔ SW7 y vertical con agentes reales: estado LED y acción coincidentes.
+3. Guardar, bloquear, desconectar y reconectar: teclado operativo y mapa persistente.
+4. Encoder, macros, RGB, indicador, retorno a OAI y convivencia con Codex.
+5. Comprobar resultados de CI y funcionamiento nativo en Windows/Linux.
+6. Terminar comparación visual con el HTML de Stitch y decidir el merge después.
+
+## Dónde está cada tema
+
+- [Uso y compilación de Studio](../apps/agentpad-desktop/README.md).
+- [Distribución de teclas y luces](../apps/agentpad-desktop/OAI-LAYOUT.md).
+- [Pruebas y límites de aceptación](../apps/agentpad-desktop/VERIFICATION.md).
+- [Prueba física dual](dual-oai-vial-physical-runbook.md).
+- [Compilación del firmware](../firmware/BUILD.md) y [evidencias](../firmware/evidence/README.md).
+- [Inventario de documentos](DOCUMENTATION-INDEX.md): alcance, historia y dependencias.
+
+Los hashes de `release/MANIFEST.md` cubren `release/`, no todo el repositorio.
+El UF2 nuevo está en `apps/agentpad-desktop/output/firmware/` y se verifica por
+el manifiesto específico enlazado arriba. Una prueba automática no autoriza
+por sí sola ni un flash ni un merge.

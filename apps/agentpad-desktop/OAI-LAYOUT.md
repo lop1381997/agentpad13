@@ -1,5 +1,11 @@
 # Mover agentes y sus LEDs
 
+## Actualización de alcance — 2026-09-09
+
+Funcionalidad implementada y publicada en `codex/phase-3` (`24d9ebd`). Requiere el UF2 específico de esta guía para mover también la luz; no basta con actualizar la app. La permuta actúa en L0 sobre SW1–SW13, no en el encoder ni TP5. La prueba física del nuevo binario sigue pendiente.
+
+Referencia: [estado vigente de fase 3](../../docs/PHASE-3-STATUS.md).
+
 En **Mapa de teclas → L0**, el panel **Distribución OAI** permite:
 
 - **Orden horizontal**: agentes 1–6 en SW1, SW2, SW3, SW4, SW5, SW6.

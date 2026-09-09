@@ -1,5 +1,11 @@
 # data-stub — stand-in data for the configurator site
 
+## Actualización de alcance — 2026-09-09
+
+Estos datos son un sustituto para visualizar el producto, no una lectura del teclado conectado. La configuración persistente y la distribución OAI tecla/LED pertenecen a Studio. No se han actualizado los datos stub como consecuencia de la fase 3.
+
+Referencia: [estado vigente de fase 3](../../../docs/PHASE-3-STATUS.md).
+
 The site loads `../build/out/{catalog,positions,costs}.json` first. If the build
 has not produced them, it falls back to this directory and says so in the
 console. Everything here is **marked `"STUB": true`** and exists so the page —

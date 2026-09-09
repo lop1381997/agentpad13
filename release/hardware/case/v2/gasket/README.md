@@ -1,5 +1,11 @@
 # Optional PORON ledge-gasket kit — agentpad13 v2
 
+## Actualización de alcance — 2026-09-09
+
+La junta PORON y su montaje no cambian con la fase 3 de software. Se conservan materiales, compresión y segmentos del documento; la prueba tecla/LED no constituye validación mecánica ni requiere cortar una junta distinta.
+
+Referencia: [estado vigente de fase 3](../../../../../docs/PHASE-3-STATUS.md).
+
 A small, **optional** foam accessory for the v2 band. It adds a gentle downward
 preload on the PCB rim by seating user-cut adhesive PORON segments under the
 band's rabbet ledge.

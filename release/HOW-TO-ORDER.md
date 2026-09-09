@@ -1,5 +1,11 @@
 # HOW TO ORDER — agentpad13 v5
 
+## Actualización de alcance — 2026-09-09
+
+La entrega Studio de fase 3 no cambia la lista de compra, los archivos de fabricación ni los componentes. El configurador de este documento es para pedir/visualizar hardware; la app nativa configura un teclado existente. Para probar tecla+LED use el candidato de fase 3, distinto del firmware base de la sección final.
+
+Referencia: [estado vigente de fase 3](../docs/PHASE-3-STATUS.md).
+
 **The configurator at <https://yuz207.github.io/agentpad13/configurator/site/> is the primary way
 to build one** — pick your options and get an order sheet whose every line links to the file you
 upload or print. **This file is its static form:** the same questions in the same order, on paper.

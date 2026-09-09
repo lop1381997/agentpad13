@@ -152,9 +152,27 @@ npm run smoke:codex-oai && npm run smoke:vial-oai
 Recorded results and the emulator-fidelity caveats are in
 `firmware/FIRMWARE-V4-NOTES.md` §4d.
 
-### AgentPad13 OAI + Vial dual HID (current local candidate)
+### AgentPad13 OAI + Vial dual HID (Phase-3 candidates)
 
-The current Task-5 candidate is
+For the **current coupled key/LED candidate**, use
+`apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2`
+(125952 bytes; SHA-256
+`8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`).
+The corresponding `oai-layout-20260907-{emulator,manifest}.json` files live in
+`firmware/evidence/`. QMK commit `00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb`
+and Arm GNU 15.2.Rel1 were used. Build target remains `loudest_micro:vial_oai`;
+keep the exact ELF alongside each newly compiled UF2 for verification.
+The new projection reads the persistent L0 keymap and moves colors with OAI
+actions across SW1–SW13. It does not alter descriptors, startup/transition
+ownership, TP5 or underglow positions. Physical acceptance remains pending.
+See [current status](../docs/PHASE-3-STATUS.md) and
+[layout guide](../apps/agentpad-desktop/OAI-LAYOUT.md).
+
+The following hash and reproducibility record refer only to the **preceding
+Task-5 artifact**, not to a rebuild of the newer source. Do not relabel the
+old evidence or assume two-build reproducibility was rerun for the new UF2.
+
+The preserved Task-5 candidate is
 `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 125,440 bytes, SHA-256
 `d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18`.
 Its paired Vial definition is

@@ -1,5 +1,11 @@
 # AgentPad13 direct OAI — pre-hardware results
 
+## Actualización de alcance — 2026-09-09
+
+Registro histórico acumulativo de Direct OAI. Las fechas, cifras y hashes de sus apartados no son los de la última entrega dual. El 2026-09-09 pasó la batería completa de 175 tests firmware de la rama de fase 3; el nuevo layout tiene sus propios JSON `oai-layout-20260907-*`. No se añaden resultados físicos a este registro.
+
+Referencia: [estado vigente de fase 3](PHASE-3-STATUS.md).
+
 > **Historical chronology:** the dated sections below retain the exact host,
 > build, emulator, and artifact facts recorded at each stage. Every use of
 > “current” inside those sections means current at that dated stage and is
