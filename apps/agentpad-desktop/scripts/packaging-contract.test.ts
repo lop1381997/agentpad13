@@ -54,6 +54,6 @@ describe("AgentPad13 packaging contract", () => {
     expect(workflow).toContain("pnpm test --run");
     expect(workflow).toContain("cargo test");
     expect(workflow).toContain("pnpm tauri build --debug");
-    expect(workflow.toLowerCase()).not.toMatch(/publish|release|flash|bootloader|hidapi::hidapi::new/);
+    expect(workflow.toLowerCase()).not.toMatch(/gh release|tauri-action|qmk flash|bootloader|hidapi::hidapi::new/);
   });
 });

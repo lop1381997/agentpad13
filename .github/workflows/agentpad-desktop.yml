@@ -8,6 +8,8 @@ jobs:
   test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      RUSTFLAGS: ${{ matrix.os == 'windows-latest' && '-C target-feature=+crt-static' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -42,4 +44,30 @@ jobs:
         working-directory: apps/agentpad-desktop/src-tauri
         run: cargo test
       - name: Build debug desktop bundle
+        if: runner.os != 'Windows'
         run: pnpm tauri build --debug
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: pnpm tauri build --bundles nsis
+      - name: Build Windows portable with fixed WebView2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package-windows-portable.ps1
+      - name: Validate extracted Windows portable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $zip = Get-ChildItem output/windows/*_portable.zip
+          ./scripts/test-windows-portable.ps1 -Archive $zip.FullName
+      - name: Attach Windows installer and portable
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AgentPad13-Windows-x64
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            apps/agentpad-desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            apps/agentpad-desktop/output/windows/*.zip
+            apps/agentpad-desktop/output/windows/*.sha256

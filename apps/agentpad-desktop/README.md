@@ -106,6 +106,12 @@ pnpm tauri build --debug
 
 For Linux account access, see [packaging/LINUX.md](packaging/LINUX.md).
 
+Windows now has two packaging paths: a conventional NSIS installer and a
+self-contained x64 portable ZIP with fixed WebView2 and local Data storage.
+See [packaging/WINDOWS.md](packaging/WINDOWS.md) for usage, build commands,
+runtime updates, profile migration and pending native acceptance. This source
+change has not yet produced Windows artifacts in a verified CI run.
+
 ## License
 
 GPL-2.0-or-later. The full GPL version 2 text is in [COPYING](COPYING).

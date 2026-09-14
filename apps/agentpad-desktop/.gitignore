@@ -4,3 +4,4 @@ src-tauri/target/
 .playwright-cli/
 src-tauri/gen/
 output/playwright/*.png
+output/windows/

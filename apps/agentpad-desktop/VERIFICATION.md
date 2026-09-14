@@ -1,5 +1,22 @@
 # Studio acceptance — 2026-09-09
 
+## Windows installer + portable — 2026-09-14
+
+The icon-fix CI run [34353912792](https://github.com/lop1381997/agentpad13/actions/runs/34353912792)
+completed successfully on macOS, Windows and Linux. That run predates portable mode.
+The new local change retains an NSIS installer and adds a fixed-WebView2 x64 ZIP.
+Portable mode is detected by an adjacent marker; its webview data directory is
+adjacent `Data`, while installed mode keeps the existing user-specific location.
+The runtime CAB is pinned by official URL and locally measured SHA-256; the
+Windows packaging script also checks the extracted executable's Microsoft signature.
+
+Local checks: 35 frontend tests, 34 Rust tests (four new portable-path cases),
+TypeScript/Vite and Clippy pass. Windows setup code is type-checked in host test
+builds, but this is not Windows execution. The PowerShell packager and real
+installer/portable startup must still run on Windows. No Windows binaries for
+this change have yet been delivered, and no push/merge is included in this step.
+See [Windows packaging and acceptance](packaging/WINDOWS.md).
+
 ## Proven locally
 
 ### Icon packaging follow-up — 2026-09-09
