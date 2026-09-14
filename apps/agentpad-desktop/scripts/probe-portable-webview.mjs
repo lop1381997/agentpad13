@@ -3,15 +3,18 @@ import assert from 'node:assert/strict';
 const [port, mode, token] = process.argv.slice(2);
 const deadline = Date.now() + 45000;
 let target;
+let observed = [];
+let lastError;
 while (Date.now() < deadline) {
   try {
     const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+    observed = pages.map(p => ({type:p.type, url:p.url}));
     target = pages.find(p => p.type === 'page' && p.url.startsWith('http://tauri.localhost'));
     if (target) break;
-  } catch { /* WebView is still starting. */ }
+  } catch (error) { lastError = String(error); }
   await new Promise(resolve => setTimeout(resolve, 250));
 }
-assert.ok(target, 'Portable WebView did not expose its application page');
+assert.ok(target, `Portable WebView did not expose its application page: ${JSON.stringify({observed,lastError})}`);
 const socket = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => {
   socket.addEventListener('open', resolve, { once: true });

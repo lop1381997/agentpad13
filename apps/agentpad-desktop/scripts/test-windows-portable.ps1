@@ -26,7 +26,9 @@ function Test-Launch([string]$folder, [string]$mode) {
     $env:WEBVIEW2_USER_DATA_FOLDER = $null
     & icacls.exe (Join-Path $folder 'WebView2') /grant '*S-1-15-2-2:(OI)(CI)(RX)' '*S-1-15-2-1:(OI)(CI)(RX)' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Runtime ACL preparation failed' }
-    $process = Start-Process (Join-Path $folder 'AgentPad13.exe') -WorkingDirectory $env:TEMP -PassThru
+    $stdout = Join-Path $root "stdout-$port.log"
+    $stderr = Join-Path $root "stderr-$port.log"
+    $process = Start-Process (Join-Path $folder 'AgentPad13.exe') -WorkingDirectory $env:TEMP -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     try {
         & node $probe $port $mode $token
         if ($LASTEXITCODE -ne 0) { throw "Portable webview probe failed ($mode)" }
@@ -41,6 +43,10 @@ function Test-Launch([string]$folder, [string]$mode) {
         if (-not $process.WaitForExit(15000)) { throw 'Portable did not close cleanly' }
     } finally {
         $process.Refresh()
+        Write-Output "App PID $($process.Id), exited=$($process.HasExited)"
+        if ($process.HasExited) { Write-Output "App exit code: $($process.ExitCode)" }
+        Get-Content $stdout, $stderr -ErrorAction SilentlyContinue | Write-Output
+        Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object ProcessId, ParentProcessId, ExecutablePath, CommandLine | Format-List
         if (-not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
     }
 }
