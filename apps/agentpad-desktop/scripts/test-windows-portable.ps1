@@ -14,6 +14,17 @@ foreach ($required in @('AgentPad13.exe', 'agentpad13.portable', 'Start-AgentPad
 }
 $oldRuntime = $env:WEBVIEW2_BROWSER_EXECUTABLE_FOLDER
 $oldData = $env:WEBVIEW2_USER_DATA_FOLDER
+function Wait-ForRuntimeExit([string]$folder) {
+    $deadline = (Get-Date).AddSeconds(15)
+    do {
+        $engines = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object {
+            $_.ExecutablePath -and $_.ExecutablePath.StartsWith((Join-Path $folder 'WebView2'), [StringComparison]::OrdinalIgnoreCase)
+        })
+        if ($engines.Count -eq 0) { return }
+        Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $deadline)
+    throw 'The included WebView2 runtime did not exit cleanly'
+}
 function Test-Launch([string]$folder, [string]$mode) {
     # An invalid inherited runtime makes silent fallback observable. The app must override it.
     $env:WEBVIEW2_BROWSER_EXECUTABLE_FOLDER = Join-Path $root 'missing-system-runtime'
@@ -55,6 +66,7 @@ function Test-Launch([string]$folder, [string]$mode) {
         if ($process.MainWindowTitle -ne 'AgentPad13') { throw "Unexpected portable window title: $($process.MainWindowTitle)" }
         if (-not $process.CloseMainWindow()) { throw 'No native window to close' }
         if (-not $process.WaitForExit(15000)) { throw 'Portable did not close cleanly' }
+        Wait-ForRuntimeExit $folder
     } finally {
         $process.Refresh()
         Write-Output "App PID $($process.Id), exited=$($process.HasExited)"
