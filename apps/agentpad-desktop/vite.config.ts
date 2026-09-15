@@ -17,5 +17,9 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Windows hosted runners overcommit their small CPU allocation when each
+    // JSDOM file gets its own worker. Run files deterministically; individual
+    // tests remain fast and the CI result no longer depends on scheduler load.
+    fileParallelism: false,
   },
 });
