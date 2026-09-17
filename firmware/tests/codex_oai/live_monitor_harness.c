@@ -7,6 +7,7 @@
 #undef memcpy
 
 #include "live_monitor.h"
+#include "oai_led_layout.h"
 
 #define REPORT_LENGTH 32U
 
@@ -221,6 +222,52 @@ int main(void) {
         assert(reply[offset + 1U] == 0xD2U);
         assert(reply[offset + 2U] == 0xD3U);
     }
+
+    codex_led_rgb_t redistributed_frame[AGENTPAD_LIVE_MONITOR_LED_COUNT];
+    uint16_t keycodes[13];
+    for (uint8_t led = 0U; led < AGENTPAD_LIVE_MONITOR_LED_COUNT; ++led) {
+        redistributed_frame[led] = (codex_led_rgb_t){
+            (uint8_t)(led + 1U), (uint8_t)(led + 2U), (uint8_t)(led + 3U)
+        };
+    }
+    for (uint8_t position = 0U; position < 13U; ++position) {
+        keycodes[position] = (uint16_t)(0x7E02U + position);
+    }
+    keycodes[0] = 0x7E08U;
+    keycodes[6] = 0x7E02U;
+    oai_led_layout_apply(redistributed_frame, keycodes, 0x7E02U);
+    for (uint8_t led = 0U; led < AGENTPAD_LIVE_MONITOR_LED_COUNT; ++led) {
+        const codex_led_rgb_t color = redistributed_frame[led];
+        rgb_matrix_color_observer_kb(led, color.r, color.g, color.b);
+    }
+    clear_reply();
+    assert(send_request(
+        AGENTPAD_LIVE_MONITOR_COMMAND,
+        AGENTPAD_LIVE_MONITOR_GET_FRAME,
+        0U,
+        REPORT_LENGTH
+    ));
+    assert(reply[8] == 7U && reply[9] == 8U && reply[10] == 9U);
+
+    rgb_matrix_color_all_observer_kb(0x21U, 0x22U, 0x23U);
+    rgb_matrix_color_observer_kb(13U, 0xA1U, 0xA2U, 0xA3U);
+    clear_reply();
+    assert(send_request(
+        AGENTPAD_LIVE_MONITOR_COMMAND,
+        AGENTPAD_LIVE_MONITOR_GET_FRAME,
+        0U,
+        REPORT_LENGTH
+    ));
+    clear_reply();
+    assert(send_request(
+        AGENTPAD_LIVE_MONITOR_COMMAND,
+        AGENTPAD_LIVE_MONITOR_GET_FRAME,
+        1U,
+        REPORT_LENGTH
+    ));
+    assert(reply[8U + 5U * 3U] == 0xA1U);
+    assert(reply[9U + 5U * 3U] == 0xA2U);
+    assert(reply[10U + 5U * 3U] == 0xA3U);
 
     return 0;
 }

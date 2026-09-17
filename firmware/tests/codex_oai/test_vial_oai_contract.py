@@ -158,6 +158,24 @@ class VialOaiLayoutContractTest(unittest.TestCase):
         )
         self.assertIn("#    if !defined(CODEX_OAI_DYNAMIC_KEYMAP)", keyboard)
 
+    def test_dynamic_target_publishes_live_monitor_layer_and_rgb_metadata(self) -> None:
+        source = SHARED_KEYMAP.read_text(encoding="utf-8")
+        oai_source = OAI_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("agentpad_live_monitor_set_layer(active_layer);", source)
+        self.assertIn("agentpad_live_monitor_set_flags", source)
+        self.assertIn("AGENTPAD_LIVE_MONITOR_FLAG_TRANSITION", source)
+        self.assertIn("AGENTPAD_LIVE_MONITOR_FLAG_STARTUP", source)
+        self.assertIn("AGENTPAD_LIVE_MONITOR_FLAG_RGB_OFF", source)
+        self.assertIn("CODEX_OAI_DYNAMIC_KEYMAP", source)
+        self.assertNotIn("AGENTPAD_LIVE_MONITOR", oai_source)
+
+        housekeeping = source[source.index("void housekeeping_task_user"):source.index("static void paint_capped_codex_led")]
+        self.assertLess(
+            housekeeping.index("agentpad_live_monitor_set_layer(active_layer);"),
+            housekeeping.index("codex_led_start_layer_transition(active_layer, now_ms);"),
+        )
+
     def test_layer_three_defaults_to_full_vialrgb_controls(self) -> None:
         """A fresh Vial EEPROM exposes effect, hue, saturation, value and speed controls."""
         source = SHARED_KEYMAP.read_text(encoding="utf-8")
@@ -207,6 +225,8 @@ class VialOaiProtocolContractTest(unittest.TestCase):
         source = KEYBOARD_SOURCE.read_text()
 
         self.assertIn("bool via_command_kb(uint8_t *data, uint8_t length)", source)
+        self.assertIn("if (agentpad_live_monitor_via_command(data, length))", source)
+        self.assertIn("#if defined(CODEX_OAI_DYNAMIC_KEYMAP)", source)
         self.assertNotIn("codex_oai_vial_command", source)
         self.assertNotIn("OAI_VIAL_FRAME_PREFIX", source)
 

@@ -13,6 +13,7 @@
 #if defined(CODEX_OAI_DYNAMIC_KEYMAP)
 #    include "vial.h"
 #    include "dynamic_keymap.h"
+#    include "../vial_oai/live_monitor.h"
 #    include "../vial_oai/oai_led_layout.h"
 #    include "../vial_oai/physical_oai_return.h"
 #endif
@@ -672,6 +673,9 @@ void housekeeping_task_user(void) {
     uint8_t active_layer = get_highest_layer(layer_state | default_layer_state);
     bool handshake_changed = handshake_revision != oai_handshake_revision;
 
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+    agentpad_live_monitor_set_layer(active_layer);
+#endif
     if (active_layer != oai_layer) {
         oai_layer = active_layer;
         codex_led_set_layer(active_layer, now_ms);
@@ -722,8 +726,22 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
 #if defined(CODEX_OAI_DYNAMIC_KEYMAP)
     uint8_t active_layer = get_highest_layer(layer_state | default_layer_state);
 #endif
+    const bool transition_active = codex_led_render_layer_transition(now_ms, frame);
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+    uint8_t monitor_flags = AGENTPAD_LIVE_MONITOR_FLAG_LIVE;
+    if (transition_active) {
+        monitor_flags |= AGENTPAD_LIVE_MONITOR_FLAG_TRANSITION;
+    }
+    if (codex_led_startup_active(now_ms)) {
+        monitor_flags |= AGENTPAD_LIVE_MONITOR_FLAG_STARTUP;
+    }
+    if (!rgb_matrix_is_enabled()) {
+        monitor_flags |= AGENTPAD_LIVE_MONITOR_FLAG_RGB_OFF;
+    }
+    agentpad_live_monitor_set_flags(monitor_flags);
+#endif
 
-    if (codex_led_render_layer_transition(now_ms, frame)) {
+    if (transition_active) {
         paint_capped_codex_frame(frame, led_min, led_max, current_value);
         return true;
     }

@@ -38,6 +38,10 @@
 #    include "raw_hid.h"
 #endif
 
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+#    include "keymaps/vial_oai/live_monitor.h"
+#endif
+
 // ---------------------------------------------------------------------------
 // Layer count (bound for SET_LAYER). Vial supplies DYNAMIC_KEYMAP_LAYER_COUNT;
 // the plain QMK keymap defines 8 layers in its keymaps[] array.
@@ -413,6 +417,11 @@ static bool loudest_tail_zero(const uint8_t *data, uint8_t from, uint8_t upto) {
 }
 
 bool via_command_kb(uint8_t *data, uint8_t length) {
+#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
+    if (agentpad_live_monitor_via_command(data, length)) {
+        return true;
+    }
+#endif
     switch (data[0]) {
         case LOUDEST_CMD_SET_KEY:
             if (length >= 6 && data[1] < LOUDEST_LED_COUNT && data[5] <= LOUDEST_FX_BLINK && loudest_tail_zero(data, 6, length) && !loudest_tail_zero(data, 1, 6)) {
