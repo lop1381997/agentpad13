@@ -3,8 +3,8 @@ use std::collections::VecDeque;
 use crate::client::{ClientError, VialClient};
 use crate::device::VIAL_REPORT_BYTES;
 use crate::domain::{
-    EncoderBinding, EncoderChange, EncoderDirection, KeyChange, MacroBuffer, MatrixPosition,
-    UnlockProgress, UnlockStatus, VialRgbState,
+    EncoderBinding, EncoderChange, EncoderDirection, KeyChange, LedRgb, LiveLedFrame,
+    LiveMonitorInfo, MacroBuffer, MatrixPosition, UnlockProgress, UnlockStatus, VialRgbState,
 };
 use crate::transport::{TransportError, VialTransport};
 
@@ -136,6 +136,55 @@ fn unlock_status_response(
     for (index, (row, column)) in required_keys.iter().enumerate() {
         frame[2 + index * 2] = *row;
         frame[2 + index * 2 + 1] = *column;
+    }
+    frame
+}
+
+fn live_monitor_info_response(
+    major: u8,
+    minor: u8,
+    led_count: u8,
+    chunk_led_count: u8,
+    chunk_count: u8,
+    maximum_fps: u8,
+) -> [u8; VIAL_REPORT_BYTES] {
+    via_response(
+        0x7d,
+        &[
+            0x01,
+            major,
+            minor,
+            led_count,
+            chunk_led_count,
+            chunk_count,
+            maximum_fps,
+            0x0f,
+        ],
+    )
+}
+
+fn live_monitor_frame_response(
+    sequence: u16,
+    active_layer: u8,
+    flags: u8,
+    chunk: u8,
+    leds: &[LedRgb],
+) -> [u8; VIAL_REPORT_BYTES] {
+    let mut frame = via_response(
+        0x7d,
+        &[
+            0x02,
+            sequence as u8,
+            (sequence >> 8) as u8,
+            active_layer,
+            flags,
+            chunk,
+            0,
+        ],
+    );
+    for (index, led) in leds.iter().enumerate() {
+        let offset = 8 + index * 3;
+        frame[offset..offset + 3].copy_from_slice(&[led.red, led.green, led.blue]);
     }
     frame
 }
@@ -375,7 +424,9 @@ fn reads_and_persists_vialrgb_with_readback() {
     assert_eq!(info.supported_modes, vec![0, 1, 2, 13]);
     assert_eq!(current, state);
     assert_eq!(
-        client.write_vialrgb(&state).expect("VialRGB state reads back"),
+        client
+            .write_vialrgb(&state)
+            .expect("VialRGB state reads back"),
         state
     );
 
@@ -431,8 +482,8 @@ fn rejects_vialrgb_when_the_readback_differs() {
 #[test]
 fn writes_macro_buffer_atomically_and_reads_it_back() {
     let original = vec![
-        b'h', b'e', b'l', b'l', b'o', 0, b'w', b'o', b'r', b'l', b'd', 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        b'h', b'e', b'l', b'l', b'o', 0, b'w', b'o', b'r', b'l', b'd', 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ];
     let mut next = original.clone();
     next[0..6].copy_from_slice(b"review");
@@ -504,5 +555,246 @@ fn rejects_macro_buffer_when_atomic_readback_differs() {
         client.write_macro_buffer(&next),
         Err(ClientError::MacroReadbackMismatch { expected, actual })
             if expected == next && actual == received
+    ));
+}
+
+#[test]
+fn reads_live_monitor_info_and_an_all_or_nothing_frame() {
+    let leds: Vec<_> = (0..24)
+        .map(|index| LedRgb {
+            red: index + 1,
+            green: index + 2,
+            blue: index + 3,
+        })
+        .collect();
+    let info_response = live_monitor_info_response(1, 0, 24, 8, 3, 20);
+    let mut info_client = VialClient::new(FakeTransport::with_responses(vec![info_response]));
+    assert_eq!(
+        info_client.read_live_monitor_info().expect("info is valid"),
+        LiveMonitorInfo {
+            major: 1,
+            minor: 0,
+            led_count: 24,
+            chunk_led_count: 8,
+            chunk_count: 3,
+            maximum_fps: 20,
+        }
+    );
+
+    let responses = vec![
+        info_response,
+        live_monitor_frame_response(0x1203, 0, 0x05, 0, &leds[0..8]),
+        live_monitor_frame_response(0x1203, 0, 0x05, 1, &leds[8..16]),
+        live_monitor_frame_response(0x1203, 0, 0x05, 2, &leds[16..24]),
+    ];
+    let mut client = VialClient::new(FakeTransport::with_responses(responses));
+
+    let frame = client.read_live_led_frame().expect("frame is complete");
+    assert_eq!(
+        frame,
+        LiveLedFrame {
+            sequence: 0x1203,
+            active_layer: 0,
+            flags: 0x05,
+            leds,
+        }
+    );
+
+    let transport = client.into_transport();
+    assert_eq!(&transport.writes[0][..2], &[0x7d, 0x01]);
+    assert_eq!(&transport.writes[1][..3], &[0x7d, 0x02, 0]);
+    assert_eq!(&transport.writes[3][..3], &[0x7d, 0x02, 2]);
+    assert_eq!(
+        frame.leds[23],
+        LedRgb {
+            red: 24,
+            green: 25,
+            blue: 26
+        }
+    );
+}
+
+#[test]
+fn rejects_an_unsupported_live_monitor_response() {
+    let mut unsupported = [0; VIAL_REPORT_BYTES];
+    unsupported[0] = 0xff;
+    let mut client = VialClient::new(FakeTransport::with_responses(vec![unsupported]));
+
+    assert!(matches!(
+        client.read_live_monitor_info(),
+        Err(ClientError::LiveMonitorUnsupported)
+    ));
+}
+
+#[test]
+fn rejects_an_unsupported_live_monitor_major_version() {
+    let mut client = VialClient::new(FakeTransport::with_responses(vec![
+        live_monitor_info_response(2, 0, 24, 8, 3, 20),
+    ]));
+
+    assert!(matches!(
+        client.read_live_monitor_info(),
+        Err(ClientError::UnsupportedLiveMonitorVersion {
+            expected: 1,
+            actual: 2
+        })
+    ));
+}
+
+#[test]
+fn rejects_live_monitor_info_with_the_wrong_led_count() {
+    let mut client = VialClient::new(FakeTransport::with_responses(vec![
+        live_monitor_info_response(1, 0, 23, 8, 3, 20),
+    ]));
+
+    assert!(matches!(
+        client.read_live_monitor_info(),
+        Err(ClientError::MalformedLiveMonitorResponse { .. })
+    ));
+}
+
+#[test]
+fn rejects_live_monitor_info_outside_the_supported_shape_or_frame_rate() {
+    for (led_count, chunk_led_count, chunk_count, maximum_fps) in
+        [(24, 7, 3, 20), (24, 8, 2, 20), (24, 8, 3, 21)]
+    {
+        let mut client = VialClient::new(FakeTransport::with_responses(vec![
+            live_monitor_info_response(1, 0, led_count, chunk_led_count, chunk_count, maximum_fps),
+        ]));
+
+        assert!(matches!(
+            client.read_live_monitor_info(),
+            Err(ClientError::MalformedLiveMonitorResponse { .. })
+        ));
+    }
+}
+
+#[test]
+fn rejects_a_live_monitor_response_with_the_wrong_command_or_opcode() {
+    let mut wrong_command = live_monitor_info_response(1, 0, 24, 8, 3, 20);
+    wrong_command[0] = 0x7c;
+    let mut client = VialClient::new(FakeTransport::with_responses(vec![wrong_command]));
+    assert!(matches!(
+        client.read_live_monitor_info(),
+        Err(ClientError::MalformedLiveMonitorResponse { .. })
+    ));
+
+    let mut wrong_opcode = live_monitor_info_response(1, 0, 24, 8, 3, 20);
+    wrong_opcode[1] = 0x03;
+    let mut client = VialClient::new(FakeTransport::with_responses(vec![wrong_opcode]));
+    assert!(matches!(
+        client.read_live_monitor_info(),
+        Err(ClientError::MalformedLiveMonitorResponse { .. })
+    ));
+}
+
+#[test]
+fn rejects_a_live_monitor_chunk_with_the_wrong_index() {
+    let leds = vec![
+        LedRgb {
+            red: 1,
+            green: 2,
+            blue: 3
+        };
+        8
+    ];
+    let mut wrong_chunk = live_monitor_frame_response(0x1203, 0, 0x05, 0, &leds);
+    wrong_chunk[6] = 1;
+    let responses = vec![live_monitor_info_response(1, 0, 24, 8, 3, 20), wrong_chunk];
+    let mut client = VialClient::new(FakeTransport::with_responses(responses));
+
+    assert!(matches!(
+        client.read_live_led_frame(),
+        Err(ClientError::InconsistentLiveMonitorFrame { .. })
+    ));
+}
+
+#[test]
+fn rejects_live_monitor_chunks_with_different_sequences() {
+    let leds = vec![
+        LedRgb {
+            red: 1,
+            green: 2,
+            blue: 3
+        };
+        8
+    ];
+    let responses = vec![
+        live_monitor_info_response(1, 0, 24, 8, 3, 20),
+        live_monitor_frame_response(0x1203, 0, 0x05, 0, &leds),
+        live_monitor_frame_response(0x1204, 0, 0x05, 1, &leds),
+    ];
+    let mut client = VialClient::new(FakeTransport::with_responses(responses));
+
+    assert!(matches!(
+        client.read_live_led_frame(),
+        Err(ClientError::InconsistentLiveMonitorFrame { .. })
+    ));
+}
+
+#[test]
+fn rejects_live_monitor_chunks_with_different_layers() {
+    let leds = vec![
+        LedRgb {
+            red: 1,
+            green: 2,
+            blue: 3
+        };
+        8
+    ];
+    let responses = vec![
+        live_monitor_info_response(1, 0, 24, 8, 3, 20),
+        live_monitor_frame_response(0x1203, 0, 0x05, 0, &leds),
+        live_monitor_frame_response(0x1203, 1, 0x05, 1, &leds),
+    ];
+    let mut client = VialClient::new(FakeTransport::with_responses(responses));
+
+    assert!(matches!(
+        client.read_live_led_frame(),
+        Err(ClientError::InconsistentLiveMonitorFrame { .. })
+    ));
+}
+
+#[test]
+fn rejects_live_monitor_chunks_with_different_flags() {
+    let leds = vec![
+        LedRgb {
+            red: 1,
+            green: 2,
+            blue: 3
+        };
+        8
+    ];
+    let responses = vec![
+        live_monitor_info_response(1, 0, 24, 8, 3, 20),
+        live_monitor_frame_response(0x1203, 0, 0x05, 0, &leds),
+        live_monitor_frame_response(0x1203, 0, 0x01, 1, &leds),
+    ];
+    let mut client = VialClient::new(FakeTransport::with_responses(responses));
+
+    assert!(matches!(
+        client.read_live_led_frame(),
+        Err(ClientError::InconsistentLiveMonitorFrame { .. })
+    ));
+}
+
+#[test]
+fn rejects_a_live_monitor_frame_with_malformed_rgb_payload() {
+    let leds = vec![
+        LedRgb {
+            red: 1,
+            green: 2,
+            blue: 3
+        };
+        8
+    ];
+    let mut malformed = live_monitor_frame_response(0x1203, 0, 0x05, 0, &leds);
+    malformed[7] = 1;
+    let responses = vec![live_monitor_info_response(1, 0, 24, 8, 3, 20), malformed];
+    let mut client = VialClient::new(FakeTransport::with_responses(responses));
+
+    assert!(matches!(
+        client.read_live_led_frame(),
+        Err(ClientError::MalformedLiveMonitorResponse { .. })
     ));
 }

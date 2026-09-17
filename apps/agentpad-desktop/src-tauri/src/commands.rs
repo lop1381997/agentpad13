@@ -7,8 +7,8 @@ use crate::{
     client::{ClientError, VialClient},
     device::{HidCandidate, is_agentpad_vial},
     domain::{
-        EncoderBinding, EncoderChange, KeyChange, KeymapSnapshot, MacroBuffer, SaveResult,
-        UnlockProgress, UnlockStatus, VialRgbInfo, VialRgbState,
+        EncoderBinding, EncoderChange, KeyChange, KeymapSnapshot, LiveLedFrame, LiveMonitorInfo,
+        MacroBuffer, SaveResult, UnlockProgress, UnlockStatus, VialRgbInfo, VialRgbState,
     },
     hid_transport::{HidApiTransport, list_hid_candidates},
     transport::VialTransport,
@@ -107,7 +107,9 @@ pub enum AppError {
     Client(String),
     #[error("The AgentPad13 session lock is unavailable.")]
     StatePoisoned,
-    #[error("The physical Vial unlock is still in progress. Finish it before disconnecting or locking editing.")]
+    #[error(
+        "The physical Vial unlock is still in progress. Finish it before disconnecting or locking editing."
+    )]
     UnlockInProgress,
 }
 
@@ -191,6 +193,14 @@ pub fn get_vialrgb_impl(state: &AppState) -> Result<VialRgbSnapshot, AppError> {
     })
 }
 
+pub fn get_live_monitor_info_impl(state: &AppState) -> Result<LiveMonitorInfo, AppError> {
+    state.with_session(VialClient::read_live_monitor_info)
+}
+
+pub fn get_live_led_frame_impl(state: &AppState) -> Result<LiveLedFrame, AppError> {
+    state.with_session(VialClient::read_live_led_frame)
+}
+
 pub fn save_vialrgb_impl(state: &AppState, next: VialRgbState) -> Result<VialRgbState, AppError> {
     state.with_session(|client| client.write_vialrgb(&next))
 }
@@ -218,7 +228,11 @@ pub fn poll_unlock_impl(state: &AppState) -> Result<UnlockProgress, AppError> {
 pub fn lock_device_impl(state: &AppState) -> Result<UnlockStatus, AppError> {
     let mut session = state.session.lock().map_err(|_| AppError::StatePoisoned)?;
     let client = session.as_mut().ok_or(AppError::NotConnected)?;
-    if client.unlock_status().map_err(AppError::client)?.in_progress {
+    if client
+        .unlock_status()
+        .map_err(AppError::client)?
+        .in_progress
+    {
         return Err(AppError::UnlockInProgress);
     }
 
@@ -229,7 +243,11 @@ pub fn lock_device_impl(state: &AppState) -> Result<UnlockStatus, AppError> {
 pub fn disconnect_agentpad_impl(state: &AppState) -> Result<(), AppError> {
     let mut session = state.session.lock().map_err(|_| AppError::StatePoisoned)?;
     let client = session.as_mut().ok_or(AppError::NotConnected)?;
-    if client.unlock_status().map_err(AppError::client)?.in_progress {
+    if client
+        .unlock_status()
+        .map_err(AppError::client)?
+        .in_progress
+    {
         return Err(AppError::UnlockInProgress);
     }
     session.take().ok_or(AppError::NotConnected)?;
@@ -270,6 +288,18 @@ pub fn save_encoder_change(
 #[tauri::command]
 pub fn get_vialrgb(state: tauri::State<'_, AppState>) -> Result<VialRgbSnapshot, AppError> {
     get_vialrgb_impl(state.inner())
+}
+
+#[tauri::command]
+pub fn get_live_monitor_info(
+    state: tauri::State<'_, AppState>,
+) -> Result<LiveMonitorInfo, AppError> {
+    get_live_monitor_info_impl(state.inner())
+}
+
+#[tauri::command]
+pub fn get_live_led_frame(state: tauri::State<'_, AppState>) -> Result<LiveLedFrame, AppError> {
+    get_live_led_frame_impl(state.inner())
 }
 
 #[tauri::command]

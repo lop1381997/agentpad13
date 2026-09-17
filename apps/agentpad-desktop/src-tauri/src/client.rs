@@ -3,9 +3,9 @@ use thiserror::Error;
 use crate::{
     device::VIAL_REPORT_BYTES,
     domain::{
-        EncoderBinding, EncoderChange, KeyChange, KeymapSnapshot, MacroBuffer, MATRIX_COLUMNS,
-        MATRIX_ROWS, MatrixPosition, SaveResult, UnlockProgress, UnlockStatus, VialRgbInfo,
-        VialRgbState, VIAL_LAYER_COUNT,
+        EncoderBinding, EncoderChange, KeyChange, KeymapSnapshot, LedRgb, LiveLedFrame,
+        LiveMonitorInfo, MATRIX_COLUMNS, MATRIX_ROWS, MacroBuffer, MatrixPosition, SaveResult,
+        UnlockProgress, UnlockStatus, VIAL_LAYER_COUNT, VialRgbInfo, VialRgbState,
     },
     transport::{TransportError, VialTransport},
     vial_frame::{
@@ -36,6 +36,14 @@ const VIALRGB_GET_MODE: u8 = 0x41;
 const VIALRGB_GET_SUPPORTED: u8 = 0x42;
 const VIALRGB_SET_MODE: u8 = 0x41;
 const MACRO_BUFFER_CHUNK_BYTES: usize = 28;
+const LIVE_MONITOR_COMMAND: u8 = 0x7d;
+const LIVE_MONITOR_GET_INFO: u8 = 0x01;
+const LIVE_MONITOR_GET_FRAME: u8 = 0x02;
+const LIVE_MONITOR_PROTOCOL_MAJOR: u8 = 1;
+const LIVE_MONITOR_LED_COUNT: u8 = 24;
+const LIVE_MONITOR_CHUNK_LED_COUNT: u8 = 8;
+const LIVE_MONITOR_CHUNK_COUNT: u8 = 3;
+const LIVE_MONITOR_MAXIMUM_FPS: u8 = 20;
 
 #[derive(Debug, Error)]
 pub enum ClientError {
@@ -88,9 +96,13 @@ pub enum ClientError {
     InvalidUnlockComboPosition { row: u8, column: u8 },
     #[error("AgentPad13 does not expose VialRGB on its Vial interface")]
     VialRgbUnsupported,
-    #[error("AgentPad13 reports unsupported VialRGB protocol version {actual}; Studio requires version {expected}")]
+    #[error(
+        "AgentPad13 reports unsupported VialRGB protocol version {actual}; Studio requires version {expected}"
+    )]
     UnsupportedVialRgbProtocol { expected: u16, actual: u16 },
-    #[error("VialRGB response subcommand differs: expected {expected:#04x}, received {actual:#04x}")]
+    #[error(
+        "VialRGB response subcommand differs: expected {expected:#04x}, received {actual:#04x}"
+    )]
     UnexpectedVialRgbSubcommand { expected: u8, actual: u8 },
     #[error("VialRGB returned a supported-effects page without a terminator")]
     UnterminatedVialRgbSupportedModes,
@@ -99,9 +111,13 @@ pub enum ClientError {
         expected: VialRgbState,
         actual: VialRgbState,
     },
-    #[error("macro buffer length {actual} does not match the firmware capacity of {expected} bytes")]
+    #[error(
+        "macro buffer length {actual} does not match the firmware capacity of {expected} bytes"
+    )]
     MacroBufferLengthMismatch { expected: usize, actual: usize },
-    #[error("macro buffer response does not match request at offset {requested_offset}: received offset {actual_offset} and size {actual_size}")]
+    #[error(
+        "macro buffer response does not match request at offset {requested_offset}: received offset {actual_offset} and size {actual_size}"
+    )]
     UnexpectedMacroBufferResponse {
         requested_offset: u16,
         actual_offset: u16,
@@ -109,6 +125,20 @@ pub enum ClientError {
     },
     #[error("macro buffer readback differs from the staged bytes")]
     MacroReadbackMismatch { expected: Vec<u8>, actual: Vec<u8> },
+    #[error("Live LED monitor is unavailable; use preview mode.")]
+    LiveMonitorUnsupported,
+    #[error(
+        "Live LED monitor protocol major version {actual} is unsupported (expected {expected}); use preview mode."
+    )]
+    UnsupportedLiveMonitorVersion { expected: u8, actual: u8 },
+    #[error(
+        "Malformed live LED monitor response ({detail}); retry the complete live-monitor cycle."
+    )]
+    MalformedLiveMonitorResponse { detail: String },
+    #[error(
+        "Live LED monitor chunks are inconsistent ({detail}); retry the complete live-monitor cycle."
+    )]
+    InconsistentLiveMonitorFrame { detail: String },
 }
 
 pub struct VialClient<T: VialTransport> {
@@ -252,7 +282,8 @@ impl<T: VialTransport> VialClient<T> {
     }
 
     pub fn read_vialrgb(&mut self) -> Result<(VialRgbInfo, VialRgbState), ClientError> {
-        let info_response = self.request_vialrgb_value(VIA_LIGHTING_GET_VALUE, VIALRGB_GET_INFO, &[])?;
+        let info_response =
+            self.request_vialrgb_value(VIA_LIGHTING_GET_VALUE, VIALRGB_GET_INFO, &[])?;
         let protocol_version = u16::from_le_bytes([info_response[2], info_response[3]]);
         if protocol_version != VIALRGB_PROTOCOL_VERSION {
             return Err(ClientError::UnsupportedVialRgbProtocol {
@@ -295,6 +326,141 @@ impl<T: VialTransport> VialClient<T> {
 
         self.request_via(VIA_LIGHTING_SAVE, &[])?;
         Ok(actual)
+    }
+
+    pub fn read_live_monitor_info(&mut self) -> Result<LiveMonitorInfo, ClientError> {
+        let response = self.request_live_monitor(LIVE_MONITOR_GET_INFO, &[])?;
+        if response[1] != LIVE_MONITOR_GET_INFO {
+            return Err(ClientError::MalformedLiveMonitorResponse {
+                detail: format!(
+                    "expected info opcode {LIVE_MONITOR_GET_INFO:#04x}, received {:#04x}",
+                    response[1]
+                ),
+            });
+        }
+
+        let major = response[2];
+        if major != LIVE_MONITOR_PROTOCOL_MAJOR {
+            return Err(ClientError::UnsupportedLiveMonitorVersion {
+                expected: LIVE_MONITOR_PROTOCOL_MAJOR,
+                actual: major,
+            });
+        }
+
+        let info = LiveMonitorInfo {
+            major,
+            minor: response[3],
+            led_count: response[4],
+            chunk_led_count: response[5],
+            chunk_count: response[6],
+            maximum_fps: response[7],
+        };
+        if info.led_count != LIVE_MONITOR_LED_COUNT
+            || info.chunk_led_count != LIVE_MONITOR_CHUNK_LED_COUNT
+            || info.chunk_count != LIVE_MONITOR_CHUNK_COUNT
+            || info.maximum_fps > LIVE_MONITOR_MAXIMUM_FPS
+        {
+            return Err(ClientError::MalformedLiveMonitorResponse {
+                detail: format!(
+                    "unsupported geometry or frame rate: {}/{}/{}/{}",
+                    info.led_count, info.chunk_led_count, info.chunk_count, info.maximum_fps
+                ),
+            });
+        }
+
+        Ok(info)
+    }
+
+    pub fn read_live_led_frame(&mut self) -> Result<LiveLedFrame, ClientError> {
+        let info = self.read_live_monitor_info()?;
+        let mut leds = Vec::with_capacity(info.led_count as usize);
+        let mut sequence = None;
+        let mut active_layer = None;
+        let mut flags = None;
+
+        for chunk in 0..info.chunk_count {
+            let response = self.request_live_monitor(LIVE_MONITOR_GET_FRAME, &[chunk])?;
+            if response[1] != LIVE_MONITOR_GET_FRAME {
+                return Err(ClientError::MalformedLiveMonitorResponse {
+                    detail: format!(
+                        "expected frame opcode {LIVE_MONITOR_GET_FRAME:#04x}, received {:#04x}",
+                        response[1]
+                    ),
+                });
+            }
+            if response[6] != chunk {
+                return Err(ClientError::InconsistentLiveMonitorFrame {
+                    detail: format!("requested chunk {chunk}, received {}", response[6]),
+                });
+            }
+            if response[7] != 0 {
+                return Err(ClientError::MalformedLiveMonitorResponse {
+                    detail: format!("reserved RGB payload byte is nonzero: {}", response[7]),
+                });
+            }
+
+            let actual_sequence = u16::from_le_bytes([response[2], response[3]]);
+            let actual_layer = response[4];
+            let actual_flags = response[5];
+            if let Some(expected_sequence) = sequence {
+                if actual_sequence != expected_sequence {
+                    return Err(ClientError::InconsistentLiveMonitorFrame {
+                        detail: format!(
+                            "sequence changed from {expected_sequence:#06x} to {actual_sequence:#06x}"
+                        ),
+                    });
+                }
+            } else {
+                sequence = Some(actual_sequence);
+            }
+            if let Some(expected_layer) = active_layer {
+                if actual_layer != expected_layer {
+                    return Err(ClientError::InconsistentLiveMonitorFrame {
+                        detail: format!(
+                            "active layer changed from {expected_layer} to {actual_layer}"
+                        ),
+                    });
+                }
+            } else {
+                active_layer = Some(actual_layer);
+            }
+            if let Some(expected_flags) = flags {
+                if actual_flags != expected_flags {
+                    return Err(ClientError::InconsistentLiveMonitorFrame {
+                        detail: format!(
+                            "flags changed from {expected_flags:#04x} to {actual_flags:#04x}"
+                        ),
+                    });
+                }
+            } else {
+                flags = Some(actual_flags);
+            }
+
+            let (rgb_values, remainder) = response[8..].as_chunks::<3>();
+            if !remainder.is_empty() || rgb_values.len() != info.chunk_led_count as usize {
+                return Err(ClientError::MalformedLiveMonitorResponse {
+                    detail: format!("expected {} RGB triples", info.chunk_led_count),
+                });
+            }
+            leds.extend(rgb_values.iter().map(|rgb| LedRgb {
+                red: rgb[0],
+                green: rgb[1],
+                blue: rgb[2],
+            }));
+        }
+
+        if leds.len() != info.led_count as usize {
+            return Err(ClientError::MalformedLiveMonitorResponse {
+                detail: format!("expected {} LEDs, received {}", info.led_count, leds.len()),
+            });
+        }
+
+        Ok(LiveLedFrame {
+            sequence: sequence.expect("live monitor has at least one chunk"),
+            active_layer: active_layer.expect("live monitor has at least one chunk"),
+            flags: flags.expect("live monitor has at least one chunk"),
+            leds,
+        })
     }
 
     pub fn read_macro_buffer(&mut self) -> Result<MacroBuffer, ClientError> {
@@ -496,6 +662,31 @@ impl<T: VialTransport> VialClient<T> {
         self.transport.write(&request)?;
         let response = self.transport.read_timeout(VIAL_TIMEOUT_MS)?;
         Ok(parse_via_response(&response, command)?)
+    }
+
+    fn request_live_monitor(
+        &mut self,
+        opcode: u8,
+        payload: &[u8],
+    ) -> Result<[u8; VIAL_REPORT_BYTES], ClientError> {
+        let mut full_payload = Vec::with_capacity(payload.len() + 1);
+        full_payload.push(opcode);
+        full_payload.extend_from_slice(payload);
+        let request = encode_via(LIVE_MONITOR_COMMAND, &full_payload)?;
+        self.transport.write(&request)?;
+        let response = self.transport.read_timeout(VIAL_TIMEOUT_MS)?;
+        if response[0] == 0xff {
+            return Err(ClientError::LiveMonitorUnsupported);
+        }
+        if response[0] != LIVE_MONITOR_COMMAND {
+            return Err(ClientError::MalformedLiveMonitorResponse {
+                detail: format!(
+                    "expected command {LIVE_MONITOR_COMMAND:#04x}, received {:#04x}",
+                    response[0]
+                ),
+            });
+        }
+        Ok(response)
     }
 
     fn request_vialrgb_value(

@@ -86,6 +86,31 @@ pub struct VialRgbState {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LedRgb {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LiveMonitorInfo {
+    pub major: u8,
+    pub minor: u8,
+    pub led_count: u8,
+    pub chunk_led_count: u8,
+    pub chunk_count: u8,
+    pub maximum_fps: u8,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LiveLedFrame {
+    pub sequence: u16,
+    pub active_layer: u8,
+    pub flags: u8,
+    pub leds: Vec<LedRgb>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MacroBuffer {
     pub count: u8,
     pub bytes: Vec<u8>,

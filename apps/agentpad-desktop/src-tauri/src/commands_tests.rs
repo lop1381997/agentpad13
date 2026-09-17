@@ -5,9 +5,10 @@ use std::{
 
 use crate::{
     commands::{
-        AppError, AppState, SessionFactory, connect_agentpad_impl, list_agentpad_devices_impl,
-        disconnect_agentpad_impl, get_vialrgb_impl, lock_device_impl, save_keymap_changes_impl,
-        get_macros_impl, save_macros_impl, save_vialrgb_impl,
+        AppError, AppState, SessionFactory, connect_agentpad_impl, disconnect_agentpad_impl,
+        get_live_led_frame_impl, get_live_monitor_info_impl, get_macros_impl, get_vialrgb_impl,
+        list_agentpad_devices_impl, lock_device_impl, save_keymap_changes_impl, save_macros_impl,
+        save_vialrgb_impl,
     },
     device::{
         AGENTPAD_PRODUCT_ID, AGENTPAD_VENDOR_ID, HidCandidate, VIAL_REPORT_BYTES, VIAL_USAGE,
@@ -248,6 +249,34 @@ fn saving_without_a_selected_vial_session_returns_not_connected() {
 }
 
 #[test]
+fn live_monitor_reads_require_the_selected_vial_session_and_never_open_oai() {
+    let open_calls = Arc::new(Mutex::new(Vec::new()));
+    let factory = FakeSessionFactory {
+        candidates: vec![HidCandidate {
+            vendor_id: AGENTPAD_VENDOR_ID,
+            product_id: AGENTPAD_PRODUCT_ID,
+            usage_page: 0xff00,
+            usage: 0x0061,
+            report_id: Some(6),
+            report_bytes: 64,
+            path: "agentpad-oai".into(),
+        }],
+        open_calls: Arc::clone(&open_calls),
+    };
+    let state = AppState::with_factory(Arc::new(factory));
+
+    assert!(matches!(
+        get_live_led_frame_impl(&state),
+        Err(AppError::NotConnected)
+    ));
+    assert!(matches!(
+        get_live_monitor_info_impl(&state),
+        Err(AppError::NotConnected)
+    ));
+    assert!(open_calls.lock().expect("test lock").is_empty());
+}
+
+#[test]
 fn connection_uses_the_selected_vial_session_and_safe_lock_keeps_it_open() {
     let open_calls = Arc::new(Mutex::new(Vec::new()));
     let mut responses = connected_session_responses();
@@ -262,9 +291,7 @@ fn connection_uses_the_selected_vial_session_and_safe_lock_keeps_it_open() {
     ]);
     let factory = ScriptedSessionFactory {
         candidates: vec![matching_vial_candidate("agentpad-vial")],
-        transport: Mutex::new(Some(Box::new(ScriptedTransport::new(
-            responses,
-        )))),
+        transport: Mutex::new(Some(Box::new(ScriptedTransport::new(responses)))),
         open_calls: Arc::clone(&open_calls),
     };
     let state = AppState::with_factory(Arc::new(factory));
@@ -313,7 +340,10 @@ fn refuses_lock_or_disconnect_while_vial_unlock_is_in_progress() {
             .any(|frame| frame[..2] == [0xfe, 0x08]),
         "the unsafe lock frame must never be sent while physical unlock is active"
     );
-    assert!(save_keymap_changes_impl(&state, vec![]).is_ok(), "the session stays open");
+    assert!(
+        save_keymap_changes_impl(&state, vec![]).is_ok(),
+        "the session stays open"
+    );
 }
 
 #[test]
@@ -332,7 +362,10 @@ fn refuses_disconnect_while_vial_unlock_is_in_progress() {
         disconnect_agentpad_impl(&state),
         Err(AppError::UnlockInProgress)
     ));
-    assert!(save_keymap_changes_impl(&state, vec![]).is_ok(), "the session stays open");
+    assert!(
+        save_keymap_changes_impl(&state, vec![]).is_ok(),
+        "the session stays open"
+    );
 }
 
 #[test]

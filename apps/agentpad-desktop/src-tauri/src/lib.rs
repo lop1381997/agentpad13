@@ -49,6 +49,8 @@ pub fn run() {
             commands::save_keymap_changes,
             commands::save_encoder_change,
             commands::get_vialrgb,
+            commands::get_live_monitor_info,
+            commands::get_live_led_frame,
             commands::save_vialrgb,
             commands::get_macros,
             commands::save_macros,
