@@ -41,10 +41,12 @@ VIA_COMMAND_PATCH = REPO_ROOT / "firmware" / "patches" / "0001-via-command-kb-ba
 OAI_DESCRIPTOR_PATCH = REPO_ROOT / "firmware" / "patches" / "0002-raw-hid-report-id-chibios.patch"
 DUAL_RAW_HID_PATCH = REPO_ROOT / "firmware" / "patches" / "0003-dual-raw-hid-chibios.patch"
 DETERMINISTIC_BUILD_ID_PATCH = REPO_ROOT / "firmware" / "patches" / "0004-deterministic-vial-build-id.patch"
+RGB_MATRIX_OBSERVER_PATCH = REPO_ROOT / "firmware" / "patches" / "0005-rgb-matrix-color-observer.patch"
 VIA_COMMAND_PATCH_SHA256 = "b12c375f7de6361fb2b26ecd003b0ffd717fb54d1441f37574866c86f473268c"
 OAI_DESCRIPTOR_PATCH_SHA256 = "48eb5211383c8aa338e5b266b34cb3a90fc97cccc5586754f35d54a7bfdac002"
 DUAL_RAW_HID_PATCH_SHA256 = "ab1d1f51d34c95cc40d0e9f5a2df46089dc02304500f3cc50958db3c31874ccb"
 DETERMINISTIC_BUILD_ID_PATCH_SHA256 = "9b28d2b484b3536fe9c9bbb95ae7acbcebf566fedf99cb5a732cbcc62d333beb"
+RGB_MATRIX_OBSERVER_PATCH_SHA256 = "1427d64e95053fd7db9c1b2b1f763dcf0ee5ced00ac125418427072ddbd07511"
 QMK_PATCHED_FILE_SHA256 = {
     "quantum/via.c": "48291b5dceb67de7daf7caad9db5399c69f463485203476ae4586814f3ad46f5",
     "quantum/via.h": "0a8ef108af7114bbc1da252f2017d7a9dc502750e6d75bd6506e1513ef226e7d",
@@ -71,6 +73,10 @@ QMK_DUAL_RAW_HID_PATCHED_SHA256 = {
 }
 QMK_DETERMINISTIC_BUILD_ID_SHA256 = {
     "util/build_id.py": "5a44c90d723b07a45a54a4c7d6e60ba33fa236e93c6a3c0f322c3b4f0a4b7f90",
+}
+QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256 = {
+    "quantum/rgb_matrix/rgb_matrix.c": "998c72b22336e0f7361270890f19e3e1984c9100e537d5e285f8a001e711f4f1",
+    "quantum/rgb_matrix/rgb_matrix.h": "b3f6458475c030bc8c1e223df09085750a6f3d09e0594ffee187b8e690ab6f2b",
 }
 PINNED_GCC_VERSION = (
     "arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) "
@@ -128,11 +134,13 @@ def validate_qmk_state(status: str, file_digests: Mapping[str, str]) -> str:
     patch2_paths = frozenset(QMK_DESCRIPTOR_PATCHED_SHA256)
     patch3_paths = frozenset(QMK_DUAL_RAW_HID_PATCHED_SHA256)
     patch4_paths = frozenset(QMK_DETERMINISTIC_BUILD_ID_SHA256)
+    patch5_paths = frozenset(QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256)
     actual_status = frozenset(line for line in status.splitlines() if line)
     patch1_status = frozenset(f" M {path}" for path in patch1_paths)
     patch12_status = patch1_status | frozenset(f" M {path}" for path in patch2_paths)
     patch123_status = patch12_status | frozenset(f" M {path}" for path in patch3_paths)
     patch1234_status = patch123_status | frozenset(f" M {path}" for path in patch4_paths)
+    patch12345_status = patch1234_status | frozenset(f" M {path}" for path in patch5_paths)
     if actual_status == patch1_status:
         expected_digests = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
         state = "patch-0001"
@@ -154,8 +162,17 @@ def validate_qmk_state(status: str, file_digests: Mapping[str, str]) -> str:
             | QMK_DETERMINISTIC_BUILD_ID_SHA256
         )
         state = "patch-0001+patch-0002+patch-0003+patch-0004"
+    elif actual_status == patch12345_status:
+        expected_digests = (
+            QMK_PATCHED_FILE_SHA256
+            | QMK_DESCRIPTOR_PATCHED_SHA256
+            | QMK_DUAL_RAW_HID_PATCHED_SHA256
+            | QMK_DETERMINISTIC_BUILD_ID_SHA256
+            | QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256
+        )
+        state = "patch-0001+patch-0002+patch-0003+patch-0004+patch-0005"
     else:
-        unexpected = ", ".join(sorted(actual_status ^ patch1234_status)) or "unknown state"
+        unexpected = ", ".join(sorted(actual_status ^ patch12345_status)) or "unknown state"
         raise BuildError(f"unexpected QMK modification set: {unexpected}")
 
     for path, expected in expected_digests.items():
@@ -192,6 +209,9 @@ def verify_qmk_source_state(qmk_home: Path) -> str:
     patch1234_status = patch123_status | frozenset(
         f" M {path}" for path in QMK_DETERMINISTIC_BUILD_ID_SHA256
     )
+    patch12345_status = patch1234_status | frozenset(
+        f" M {path}" for path in QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256
+    )
     if actual_status == patch1_status:
         paths = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
     elif actual_status == patch12_status:
@@ -209,11 +229,21 @@ def verify_qmk_source_state(qmk_home: Path) -> str:
             | QMK_DUAL_RAW_HID_PATCHED_SHA256
             | QMK_DETERMINISTIC_BUILD_ID_SHA256
         )
+    elif actual_status == patch12345_status:
+        paths = (
+            QMK_PATCHED_FILE_SHA256
+            | QMK_DESCRIPTOR_PATCHED_SHA256
+            | QMK_DUAL_RAW_HID_PATCHED_SHA256
+            | QMK_DETERMINISTIC_BUILD_ID_SHA256
+            | QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256
+        )
     else:
         paths = (
             QMK_PATCHED_FILE_SHA256
             | QMK_DESCRIPTOR_BASE_SHA256
             | QMK_DUAL_RAW_HID_PATCHED_SHA256
+            | QMK_DETERMINISTIC_BUILD_ID_SHA256
+            | QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256
         )
     digests = {path: _file_sha256(qmk_home / path) for path in paths}
     return validate_qmk_state(status, digests)
@@ -238,6 +268,11 @@ def validate_qmk_home(qmk_home: Path, *, head: str | None = None) -> str:
     )
     _verify_file_sha256(
         DUAL_RAW_HID_PATCH, DUAL_RAW_HID_PATCH_SHA256, label="repository patch 0003"
+    )
+    _verify_file_sha256(
+        RGB_MATRIX_OBSERVER_PATCH,
+        RGB_MATRIX_OBSERVER_PATCH_SHA256,
+        label="repository patch 0005",
     )
     verify_qmk_source_state(qmk_home)
 
@@ -328,7 +363,7 @@ def apply_qmk_patches(qmk_home: Path) -> None:
     # Patch 0003 intentionally extends files patched by 0002.  Apply only the
     # missing suffix after validating the exact starting state; reversing 0002
     # in isolation is no longer meaningful once patch 0003 is present.
-    if state == "patch-0001+patch-0002+patch-0003+patch-0004":
+    if state == "patch-0001+patch-0002+patch-0003+patch-0004+patch-0005":
         return
     patches = (
         ("patch-0001", OAI_DESCRIPTOR_PATCH, OAI_DESCRIPTOR_PATCH_SHA256, "repository patch 0002"),
@@ -338,6 +373,12 @@ def apply_qmk_patches(qmk_home: Path) -> None:
             DETERMINISTIC_BUILD_ID_PATCH,
             DETERMINISTIC_BUILD_ID_PATCH_SHA256,
             "repository patch 0004",
+        ),
+        (
+            "patch-0001+patch-0002+patch-0003+patch-0004",
+            RGB_MATRIX_OBSERVER_PATCH,
+            RGB_MATRIX_OBSERVER_PATCH_SHA256,
+            "repository patch 0005",
         ),
     )
     expected_states = tuple(item[0] for item in patches)

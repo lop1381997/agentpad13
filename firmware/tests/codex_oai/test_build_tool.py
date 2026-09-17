@@ -113,6 +113,56 @@ class BuildToolSafetyTest(unittest.TestCase):
         for fragment in ("util/build_id.py", "QMK_BUILD_ID", "int(configured, 0)"):
             self.assertIn(fragment, patch_text)
 
+    def test_rgb_matrix_observer_build_contract_is_declared(self) -> None:
+        source = (TOOLS / "build_codex_oai.py").read_text(encoding="utf-8")
+        self.assertIn("RGB_MATRIX_OBSERVER_PATCH", source)
+        self.assertIn("0005-rgb-matrix-color-observer.patch", source)
+        self.assertIn("QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256", source)
+        self.assertIn('"quantum/rgb_matrix/rgb_matrix.c"', source)
+        self.assertIn('"quantum/rgb_matrix/rgb_matrix.h"', source)
+        self.assertEqual(
+            tuple(builder.QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256),
+            ("quantum/rgb_matrix/rgb_matrix.c", "quantum/rgb_matrix/rgb_matrix.h"),
+        )
+
+    def test_rgb_matrix_observer_patch_is_repository_owned_and_complete(self) -> None:
+        patch = REPO / "firmware" / "patches" / "0005-rgb-matrix-color-observer.patch"
+        self.assertTrue(patch.is_file())
+        patch_text = patch.read_text(encoding="utf-8")
+        for fragment in (
+            "quantum/rgb_matrix/rgb_matrix.c",
+            "quantum/rgb_matrix/rgb_matrix.h",
+            "rgb_matrix_color_observer_kb",
+            "rgb_matrix_color_all_observer_kb",
+            "__attribute__((weak))",
+        ):
+            self.assertIn(fragment, patch_text)
+
+    def test_qmk_state_accepts_exact_five_patch_state(self) -> None:
+        patch_paths = (
+            *builder.QMK_PATCHED_FILE_SHA256,
+            *builder.QMK_DESCRIPTOR_PATCHED_SHA256,
+            *builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+            *builder.QMK_DETERMINISTIC_BUILD_ID_SHA256,
+            *builder.QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256,
+        )
+        status = "".join(f" M {path}\n" for path in patch_paths)
+        digests = {
+            path: digest
+            for inventory in (
+                builder.QMK_PATCHED_FILE_SHA256,
+                builder.QMK_DESCRIPTOR_PATCHED_SHA256,
+                builder.QMK_DUAL_RAW_HID_PATCHED_SHA256,
+                builder.QMK_DETERMINISTIC_BUILD_ID_SHA256,
+                builder.QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256,
+            )
+            for path, digest in inventory.items()
+        }
+        self.assertEqual(
+            builder.validate_qmk_state(status, digests),
+            "patch-0001+patch-0002+patch-0003+patch-0004+patch-0005",
+        )
+
     def test_qmk_state_accepts_exact_four_patch_state(self) -> None:
         patch_paths = (
             *builder.QMK_PATCHED_FILE_SHA256,
@@ -161,8 +211,9 @@ class BuildToolSafetyTest(unittest.TestCase):
         patch_paths = (
             builder.DUAL_RAW_HID_PATCH,
             builder.DETERMINISTIC_BUILD_ID_PATCH,
+            builder.RGB_MATRIX_OBSERVER_PATCH,
         )
-        apply_checks = iter((True, True))
+        apply_checks = iter((True, True, True))
         applied: list[Path] = []
 
         def fake_apply(*args, **_kwargs):
@@ -177,7 +228,7 @@ class BuildToolSafetyTest(unittest.TestCase):
 
         self.assertEqual(applied, list(patch_paths))
 
-    def test_builder_applies_only_deterministic_patch_for_verified_three_patch_state(self) -> None:
+    def test_builder_applies_remaining_deterministic_and_observer_patches_for_verified_three_patch_state(self) -> None:
         with mock.patch.object(
             builder, "verify_qmk_source_state", return_value="patch-0001+patch-0002+patch-0003"
         ), mock.patch.object(builder, "_git_apply_check", return_value=True), mock.patch.object(
@@ -185,14 +236,32 @@ class BuildToolSafetyTest(unittest.TestCase):
         ) as runner:
             apply_qmk_patches(self.fake_qmk)
 
+        self.assertEqual(
+            [call.args[0][-1] for call in runner.call_args_list],
+            [str(builder.DETERMINISTIC_BUILD_ID_PATCH), str(builder.RGB_MATRIX_OBSERVER_PATCH)],
+        )
+
+    def test_builder_applies_only_observer_patch_for_verified_four_patch_state(self) -> None:
+        with mock.patch.object(
+            builder,
+            "verify_qmk_source_state",
+            return_value="patch-0001+patch-0002+patch-0003+patch-0004",
+        ) as verify, mock.patch.object(builder, "_git_apply_check", return_value=True), mock.patch.object(
+            builder, "_run"
+        ) as runner:
+            apply_qmk_patches(self.fake_qmk)
+
+        verify.assert_called_once_with(self.fake_qmk)
         runner.assert_called_once_with(
-            ("git", "-C", str(self.fake_qmk), "apply", str(builder.DETERMINISTIC_BUILD_ID_PATCH)),
+            ("git", "-C", str(self.fake_qmk), "apply", str(builder.RGB_MATRIX_OBSERVER_PATCH)),
             cwd=self.fake_qmk,
         )
 
-    def test_builder_skips_patch_reapplication_for_verified_four_patch_state(self) -> None:
+    def test_builder_skips_patch_reapplication_for_verified_five_patch_state(self) -> None:
         with mock.patch.object(
-            builder, "verify_qmk_source_state", return_value="patch-0001+patch-0002+patch-0003+patch-0004"
+            builder,
+            "verify_qmk_source_state",
+            return_value="patch-0001+patch-0002+patch-0003+patch-0004+patch-0005",
         ) as verify, mock.patch.object(
             builder, "_git_apply_check", side_effect=AssertionError("must not re-check an already verified patch set")
         ):
