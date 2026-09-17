@@ -4,12 +4,33 @@
 #include <stdint.h>
 #include <string.h>
 
+#undef memcpy
+
 #include "live_monitor.h"
 
 #define REPORT_LENGTH 32U
 
 static uint8_t reply[REPORT_LENGTH];
 static uint8_t sent_count;
+static bool interleave_capture_all;
+
+void *memcpy(void *destination, const void *source, size_t length) {
+    uint8_t *destination_bytes = destination;
+    const uint8_t *source_bytes = source;
+    const size_t midpoint = length / 2U;
+
+    for (size_t index = 0U; index < midpoint; ++index) {
+        destination_bytes[index] = source_bytes[index];
+    }
+    if (interleave_capture_all && length == sizeof(agentpad_live_monitor_rgb_t) * AGENTPAD_LIVE_MONITOR_LED_COUNT) {
+        interleave_capture_all = false;
+        rgb_matrix_color_all_observer_kb(0xD1U, 0xD2U, 0xD3U);
+    }
+    for (size_t index = midpoint; index < length; ++index) {
+        destination_bytes[index] = source_bytes[index];
+    }
+    return destination;
+}
 
 void raw_hid_send(uint8_t *data, uint8_t length) {
     assert(length == REPORT_LENGTH);
@@ -183,6 +204,22 @@ int main(void) {
         assert(reply[offset] == 0xA1U);
         assert(reply[offset + 1U] == 0xB2U);
         assert(reply[offset + 2U] == 0xC3U);
+    }
+
+    rgb_matrix_color_all_observer_kb(0x11U, 0x22U, 0x33U);
+    interleave_capture_all = true;
+    clear_reply();
+    assert(send_request(
+        AGENTPAD_LIVE_MONITOR_COMMAND,
+        AGENTPAD_LIVE_MONITOR_GET_FRAME,
+        0U,
+        REPORT_LENGTH
+    ));
+    assert(reply[2] == 4U && reply[3] == 0U);
+    for (uint8_t offset = 8U; offset < REPORT_LENGTH; offset += 3U) {
+        assert(reply[offset] == 0xD1U);
+        assert(reply[offset + 1U] == 0xD2U);
+        assert(reply[offset + 2U] == 0xD3U);
     }
 
     return 0;

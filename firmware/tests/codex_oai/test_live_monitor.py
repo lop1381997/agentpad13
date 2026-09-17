@@ -24,6 +24,7 @@ class LiveMonitorProtocolTest(unittest.TestCase):
                 "-Wall",
                 "-Wextra",
                 "-Werror",
+                "-fno-builtin-memcpy",
                 "-I",
                 str(TARGET),
                 "-I",

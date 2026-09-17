@@ -7,11 +7,45 @@
 
 static agentpad_live_monitor_rgb_t captured_frame[AGENTPAD_LIVE_MONITOR_LED_COUNT];
 static agentpad_live_monitor_rgb_t served_frame[AGENTPAD_LIVE_MONITOR_LED_COUNT];
+static volatile uint32_t captured_frame_version;
 static uint16_t served_sequence;
 static uint8_t served_layer;
 static uint8_t served_flags;
 static uint8_t current_layer;
 static uint8_t current_flags;
+
+static void capture_memory_barrier(void) {
+    __asm__ volatile("" ::: "memory");
+}
+
+static void begin_capture_update(void) {
+    ++captured_frame_version;
+    capture_memory_barrier();
+}
+
+static void end_capture_update(void) {
+    capture_memory_barrier();
+    ++captured_frame_version;
+}
+
+static void snapshot_captured_frame(void) {
+    uint32_t version_before;
+    uint32_t version_after;
+
+    for (;;) {
+        version_before = captured_frame_version;
+        if ((version_before & 1U) != 0U) {
+            continue;
+        }
+        capture_memory_barrier();
+        memcpy(served_frame, captured_frame, sizeof(served_frame));
+        capture_memory_barrier();
+        version_after = captured_frame_version;
+        if (version_before == version_after && (version_after & 1U) == 0U) {
+            return;
+        }
+    }
+}
 
 static bool payload_is_zero(const uint8_t *data, uint8_t from) {
     for (uint8_t index = from; index < AGENTPAD_LIVE_MONITOR_REPORT_LENGTH; ++index) {
@@ -61,14 +95,18 @@ void agentpad_live_monitor_capture_led(uint8_t led, uint8_t r, uint8_t g, uint8_
     if (led >= AGENTPAD_LIVE_MONITOR_LED_COUNT) {
         return;
     }
+    begin_capture_update();
     captured_frame[led] = (agentpad_live_monitor_rgb_t){r, g, b};
+    end_capture_update();
 }
 
 void agentpad_live_monitor_capture_all(uint8_t r, uint8_t g, uint8_t b) {
     const agentpad_live_monitor_rgb_t color = {r, g, b};
+    begin_capture_update();
     for (uint8_t led = 0U; led < AGENTPAD_LIVE_MONITOR_LED_COUNT; ++led) {
         captured_frame[led] = color;
     }
+    end_capture_update();
 }
 
 void agentpad_live_monitor_set_layer(uint8_t layer) {
@@ -100,7 +138,7 @@ bool agentpad_live_monitor_via_command(uint8_t *data, uint8_t length) {
                 return false;
             }
             if (data[2] == 0U) {
-                memcpy(served_frame, captured_frame, sizeof(served_frame));
+                snapshot_captured_frame();
                 served_sequence = (uint16_t)(served_sequence + 1U);
                 served_layer = current_layer;
                 served_flags = current_flags;
