@@ -14,6 +14,7 @@ KEYBOARD_SHARED_EP = yes
 
 SRC += ../codex_oai/codex_oai.c
 SRC += ../codex_oai/codex_led.c
+SRC += live_monitor.c
 SRC += encoder_contract.c
 SRC += physical_oai_return.c
 
