@@ -64,6 +64,28 @@ export type VialRgbSnapshot = {
   state: VialRgbState;
 };
 
+export type LedRgb = {
+  red: number;
+  green: number;
+  blue: number;
+};
+
+export type LiveMonitorInfo = {
+  major: number;
+  minor: number;
+  led_count: number;
+  chunk_led_count: number;
+  chunk_count: number;
+  maximum_fps: number;
+};
+
+export type LiveLedFrame = {
+  sequence: number;
+  active_layer: number;
+  flags: number;
+  leds: LedRgb[];
+};
+
 export type MacroBuffer = {
   count: number;
   bytes: number[];

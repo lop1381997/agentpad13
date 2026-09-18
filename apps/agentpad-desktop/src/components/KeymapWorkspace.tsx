@@ -1,42 +1,28 @@
 import { EncoderEditor } from "./EncoderEditor";
 import { KeyPalette } from "./KeyPalette";
-import { PadLayout } from "./PadLayout";
 import { layerDetail } from "../studio/studio-data";
-import type {
-  EncoderDirection,
-  PhysicalControl,
-} from "../model";
+import type { EncoderDirection } from "../model";
 
 type KeymapWorkspaceProps = {
-  controls: PhysicalControl[];
   activeLayer: number;
-  selectedKeyId?: string;
   selectedEncoderDirection?: EncoderDirection;
   selectedLabel?: string;
   selectedKeycode?: number;
-  keycodeFor: (control: PhysicalControl) => number;
   encoderKeycodeFor: (direction: EncoderDirection) => number;
-  isKeyDraft: (control: PhysicalControl) => boolean;
   isEncoderDraft: (direction: EncoderDirection) => boolean;
   onSelectLayer: (layer: number) => void;
-  onSelectControl: (control: PhysicalControl) => void;
   onSelectEncoder: (direction: EncoderDirection) => void;
   onAssign: (keycode: number) => void;
 };
 
 export function KeymapWorkspace({
-  controls,
   activeLayer,
-  selectedKeyId,
   selectedEncoderDirection,
   selectedLabel,
   selectedKeycode,
-  keycodeFor,
   encoderKeycodeFor,
-  isKeyDraft,
   isEncoderDraft,
   onSelectLayer,
-  onSelectControl,
   onSelectEncoder,
   onAssign,
 }: KeymapWorkspaceProps) {
@@ -75,17 +61,10 @@ export function KeymapWorkspace({
           <div className="hardware-deck-heading">
             <div>
               <p className="eyebrow">Mapa físico</p>
-              <h3>AgentPad13 · 15 controles</h3>
+              <h3>AgentPad13 · selecciona una tecla en el teclado virtual</h3>
             </div>
             <span>L{activeLayer}</span>
           </div>
-          <PadLayout
-            controls={controls}
-            selectedId={selectedKeyId}
-            keycodeFor={keycodeFor}
-            isDraft={isKeyDraft}
-            onSelect={onSelectControl}
-          />
           <EncoderEditor
             counterClockwise={encoderKeycodeFor("counterClockwise")}
             clockwise={encoderKeycodeFor("clockwise")}

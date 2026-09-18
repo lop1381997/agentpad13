@@ -6,6 +6,8 @@ import type {
   EncoderBinding,
   EncoderDirection,
   KeyChange,
+  LiveLedFrame,
+  LiveMonitorInfo,
   MacroBuffer,
   UnlockStatus,
   UnlockProgress,
@@ -41,6 +43,14 @@ export function saveEncoderChange(change: {
 
 export function getVialRgb(): Promise<VialRgbSnapshot> {
   return invoke("get_vialrgb");
+}
+
+export function getLiveMonitorInfo(): Promise<LiveMonitorInfo> {
+  return invoke("get_live_monitor_info");
+}
+
+export function getLiveLedFrame(): Promise<LiveLedFrame> {
+  return invoke("get_live_led_frame");
 }
 
 export function saveVialRgb(next: VialRgbState): Promise<VialRgbState> {

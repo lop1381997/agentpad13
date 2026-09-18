@@ -26,6 +26,7 @@ type StudioShellProps = {
   onSave: () => void;
   onUndo: () => void;
   onRedo: () => void;
+  monitor?: ReactNode;
   children: ReactNode;
 };
 
@@ -51,6 +52,7 @@ export function StudioShell({
   onSave,
   onUndo,
   onRedo,
+  monitor,
   children,
 }: StudioShellProps) {
   const saveDisabled = !connected || !unlocked || changeCount === 0 || saving;
@@ -152,7 +154,10 @@ export function StudioShell({
             <small>OAI permanece reservado para Codex.</small>
           </div>
         </aside>
-        <main className="studio-content">{children}</main>
+        <main className="studio-content">
+          {monitor}
+          {children}
+        </main>
       </div>
     </div>
   );

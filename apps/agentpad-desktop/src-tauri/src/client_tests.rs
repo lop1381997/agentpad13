@@ -589,6 +589,10 @@ fn reads_live_monitor_info_and_an_all_or_nothing_frame() {
     ];
     let mut client = VialClient::new(FakeTransport::with_responses(responses));
 
+    client
+        .read_live_monitor_info()
+        .expect("the negotiated monitor shape is valid");
+
     let frame = client.read_live_led_frame().expect("frame is complete");
     assert_eq!(
         frame,
@@ -601,6 +605,11 @@ fn reads_live_monitor_info_and_an_all_or_nothing_frame() {
     );
 
     let transport = client.into_transport();
+    assert_eq!(
+        transport.writes.len(),
+        4,
+        "one negotiation plus three RGB chunks"
+    );
     assert_eq!(&transport.writes[0][..2], &[0x7d, 0x01]);
     assert_eq!(&transport.writes[1][..3], &[0x7d, 0x02, 0]);
     assert_eq!(&transport.writes[3][..3], &[0x7d, 0x02, 2]);
@@ -702,6 +711,9 @@ fn rejects_a_live_monitor_chunk_with_the_wrong_index() {
     wrong_chunk[6] = 1;
     let responses = vec![live_monitor_info_response(1, 0, 24, 8, 3, 20), wrong_chunk];
     let mut client = VialClient::new(FakeTransport::with_responses(responses));
+    client
+        .read_live_monitor_info()
+        .expect("monitor is negotiated");
 
     assert!(matches!(
         client.read_live_led_frame(),
@@ -725,6 +737,9 @@ fn rejects_live_monitor_chunks_with_different_sequences() {
         live_monitor_frame_response(0x1204, 0, 0x05, 1, &leds),
     ];
     let mut client = VialClient::new(FakeTransport::with_responses(responses));
+    client
+        .read_live_monitor_info()
+        .expect("monitor is negotiated");
 
     assert!(matches!(
         client.read_live_led_frame(),
@@ -748,6 +763,9 @@ fn rejects_live_monitor_chunks_with_different_layers() {
         live_monitor_frame_response(0x1203, 1, 0x05, 1, &leds),
     ];
     let mut client = VialClient::new(FakeTransport::with_responses(responses));
+    client
+        .read_live_monitor_info()
+        .expect("monitor is negotiated");
 
     assert!(matches!(
         client.read_live_led_frame(),
@@ -771,6 +789,9 @@ fn rejects_live_monitor_chunks_with_different_flags() {
         live_monitor_frame_response(0x1203, 0, 0x01, 1, &leds),
     ];
     let mut client = VialClient::new(FakeTransport::with_responses(responses));
+    client
+        .read_live_monitor_info()
+        .expect("monitor is negotiated");
 
     assert!(matches!(
         client.read_live_led_frame(),
@@ -792,6 +813,9 @@ fn rejects_a_live_monitor_frame_with_malformed_rgb_payload() {
     malformed[7] = 1;
     let responses = vec![live_monitor_info_response(1, 0, 24, 8, 3, 20), malformed];
     let mut client = VialClient::new(FakeTransport::with_responses(responses));
+    client
+        .read_live_monitor_info()
+        .expect("monitor is negotiated");
 
     assert!(matches!(
         client.read_live_led_frame(),

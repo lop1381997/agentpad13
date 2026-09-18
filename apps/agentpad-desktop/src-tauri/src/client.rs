@@ -127,6 +127,8 @@ pub enum ClientError {
     MacroReadbackMismatch { expected: Vec<u8>, actual: Vec<u8> },
     #[error("Live LED monitor is unavailable; use preview mode.")]
     LiveMonitorUnsupported,
+    #[error("Live LED monitor must be negotiated before reading a frame.")]
+    LiveMonitorNotNegotiated,
     #[error(
         "Live LED monitor protocol major version {actual} is unsupported (expected {expected}); use preview mode."
     )]
@@ -143,11 +145,15 @@ pub enum ClientError {
 
 pub struct VialClient<T: VialTransport> {
     transport: T,
+    live_monitor_info: Option<LiveMonitorInfo>,
 }
 
 impl<T: VialTransport> VialClient<T> {
     pub fn new(transport: T) -> Self {
-        Self { transport }
+        Self {
+            transport,
+            live_monitor_info: None,
+        }
     }
 
     pub fn into_transport(self) -> T {
@@ -368,11 +374,15 @@ impl<T: VialTransport> VialClient<T> {
             });
         }
 
+        self.live_monitor_info = Some(info.clone());
         Ok(info)
     }
 
     pub fn read_live_led_frame(&mut self) -> Result<LiveLedFrame, ClientError> {
-        let info = self.read_live_monitor_info()?;
+        let info = self
+            .live_monitor_info
+            .clone()
+            .ok_or(ClientError::LiveMonitorNotNegotiated)?;
         let mut leds = Vec::with_capacity(info.led_count as usize);
         let mut sequence = None;
         let mut active_layer = None;

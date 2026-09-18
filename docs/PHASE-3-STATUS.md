@@ -1,6 +1,6 @@
 # Fase 3 — estado y guía de navegación
 
-Actualizado el 2026-09-09. Este documento reúne el estado vigente; los planes,
+Actualizado el 2026-09-18. Este documento reúne el estado vigente; los planes,
 auditorías y registros fechados conservan las decisiones y pruebas de su momento.
 No se deben interpretar sus candidatos antiguos como el firmware recomendado
 para probar las nuevas funciones de Studio.
@@ -31,6 +31,13 @@ de ejecución no se ha comprobado en esta tarea.
 - Diagnóstico, exportación nativa y ajuste local de alto contraste.
 - En L0, distribución horizontal/vertical de las 13 acciones OAI y permuta
   de dos posiciones, manteniendo unidos la acción y su LED.
+- Teclado virtual permanente en Studio: reproduce los 24 LEDs físicos, incluidos
+  L0/OAI, el anillo periférico y el indicador fijo de capa. Una pulsación en la
+  vista virtual solo abre la edición del control; nunca ejecuta una acción.
+- Monitor Vial de LEDs en tiempo real: negocia una vez la extensión `0x7D` y
+  recibe tres bloques RGB atómicos por frame, con un límite de 20 FPS. Se pausa
+  al guardar, desbloquear, ocultar la ventana o tener otra lectura en curso.
+  Se puede seguir la capa física o fijar una capa distinta para editar.
 
 ## Contrato que no cambia
 
@@ -42,6 +49,12 @@ de ejecución no se ha comprobado en esta tarea.
 Studio no abre el canal OAI. La distribución se guarda en el mapa Vial de L0;
 el firmware consulta ese mismo mapa para colocar los colores. No hay una segunda
 tabla independiente de LEDs ni cambios en las tramas de Codex.
+
+La extensión de monitor también viaja exclusivamente por Vial (`0x7D`, informe
+sin ID de 32 bytes). Un frame sólo se muestra si los tres fragmentos coinciden
+en secuencia, capa y flags; ante un error se mantiene el último estado atenuado.
+Un firmware anterior queda en vista previa segura y Studio conserva toda su
+capacidad de edición.
 
 `SW1 + SW4` vuelve a L0 desde cualquier capa (ventana física de 80 ms).
 `SW1 + SW13` es el desbloqueo de Vial, solo durante su procedimiento específico.
@@ -76,10 +89,20 @@ siguen documentados por separado; no han sido sustituidos por este candidato.
 
 ## Evidencia y pendientes
 
-Resultados del 2026-09-09: **34 tests frontend, 30 Rust y 175 firmware**, todos
-correctos, además de TypeScript/Vite. Clippy y el paquete macOS se comprobaron
-previamente. WebKit cubre los flujos con HID simulado. El 2026-09-08 se exportó
-un diagnóstico real mediante el diálogo Guardar de macOS.
+Resultados del 2026-09-18: **41 tests frontend y 46 Rust** correctos, además de
+TypeScript/Vite y la compilación del binario nativo macOS. Pasaron las 32 pruebas
+de firmware directamente implicadas (monitor, contrato Phase 3, Vial OAI,
+retorno a OAI y límite RGB). La batería completa se inició pero se detuvo porque
+dos ejecuciones concurrentes de emulador quedaron esperando; no se cuenta como
+resultado completo. El empaquetado DMG alcanzó el binario y se detuvo en el paso
+gráfico `osascript`, que requiere una sesión de Finder interactiva.
+
+El nuevo firmware del monitor **todavía necesita una reconstrucción**. El
+worktree QMK local fijado no puede mapear su índice Git, por lo que el builder
+se detuvo antes de aplicar parches, compilar o publicar ningún UF2. El candidato
+de 2026-09-07 sigue siendo válido para tecla+luz, pero no expone el monitor LED
+en tiempo real; Studio mostrará su vista previa segura hasta instalar un UF2
+reconstruido.
 
 El harness C comprueba 169 permutas de teclas y los LEDs reservados. El emulador
 comprueba comunicaciones y actividad WS2812, no colores físicos. Su recuperación
@@ -88,12 +111,16 @@ esa prueba corresponde al verificador estático del ELF.
 
 Pendientes antes de cerrar fase 3:
 
-1. Exportar perfil y probar el nuevo firmware en el teclado real, con autorización.
-2. Probar SW1 ↔ SW7 y vertical con agentes reales: estado LED y acción coincidentes.
-3. Guardar, bloquear, desconectar y reconectar: teclado operativo y mapa persistente.
-4. Encoder, macros, RGB, indicador, retorno a OAI y convivencia con Codex.
-5. Comprobar resultados de CI y funcionamiento nativo en Windows/Linux.
-6. Terminar comparación visual con el HTML de Stitch y decidir el merge después.
+1. Reparar o recrear el worktree QMK fijado, reconstruir el UF2 con el parche
+   `0005-rgb-matrix-color-observer.patch` y verificar el artefacto.
+2. Exportar perfil y probar el nuevo firmware en el teclado real, con autorización.
+3. Probar SW1 ↔ SW7 y vertical con agentes reales: estado LED y acción coincidentes.
+4. Guardar, bloquear, desconectar y reconectar: teclado operativo y mapa persistente.
+5. Confirmar que el teclado virtual sigue los colores físicos de L0–L7 y que
+   no lee durante guardado, desbloqueo o pestaña oculta.
+6. Encoder, macros, RGB, indicador, retorno a OAI y convivencia con Codex.
+7. Comprobar resultados de CI y funcionamiento nativo en Windows/Linux.
+8. Terminar comparación visual con el HTML de Stitch y decidir el merge después.
 
 ## Dónde está cada tema
 

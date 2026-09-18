@@ -11,6 +11,8 @@ vi.mock("./bridge", () => ({
   beginUnlock: vi.fn(),
   connectAgentpad: vi.fn(),
   disconnectAgentpad: vi.fn(),
+  getLiveLedFrame: vi.fn(),
+  getLiveMonitorInfo: vi.fn(),
   getMacros: vi.fn(),
   getVialRgb: vi.fn(),
   listAgentpadDevices: vi.fn(),
@@ -46,6 +48,26 @@ const lighting = {
   state: { mode: 13, speed: 88, hue: 32, saturation: 64, brightness: 91 },
 };
 
+const liveMonitorInfo = {
+  major: 1,
+  minor: 0,
+  led_count: 24,
+  chunk_led_count: 8,
+  chunk_count: 3,
+  maximum_fps: 20,
+};
+
+const liveFrame = {
+  sequence: 9,
+  active_layer: 0,
+  flags: 1,
+  leds: Array.from({ length: 24 }, (_, index) => ({
+    red: index === 0 ? 255 : 0,
+    green: 0,
+    blue: 0,
+  })),
+};
+
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
   return {
@@ -60,13 +82,19 @@ function memoryStorage(): Storage {
   };
 }
 
-async function connectEditor(nextSnapshot: EditorSnapshot = snapshot) {
+async function connectEditor(nextSnapshot: EditorSnapshot = snapshot, liveMonitorAvailable = true) {
   vi.mocked(bridge.listAgentpadDevices).mockResolvedValue([
     { path: "agentpad-vial", label: "AgentPad13 · Vial" },
   ]);
   vi.mocked(bridge.connectAgentpad).mockResolvedValue(nextSnapshot);
   vi.mocked(bridge.getVialRgb).mockResolvedValue(lighting);
   vi.mocked(bridge.getMacros).mockResolvedValue({ count: 16, bytes: Array.from({ length: 96 }, () => 0) });
+  if (liveMonitorAvailable) {
+    vi.mocked(bridge.getLiveMonitorInfo).mockResolvedValue(liveMonitorInfo);
+    vi.mocked(bridge.getLiveLedFrame).mockResolvedValue(liveFrame);
+  } else {
+    vi.mocked(bridge.getLiveMonitorInfo).mockRejectedValue(new Error("monitor unavailable"));
+  }
 
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Buscar AgentPad13/i }));
@@ -89,6 +117,25 @@ afterEach(() => {
 });
 
 describe("AgentPad13 Studio", () => {
+  it("shows the permanent physical LED monitor and reads only the Vial live frame", async () => {
+    await connectEditor();
+
+    await waitFor(() => expect(screen.getByText("L0 · OAI / Codex")).toBeVisible());
+    expect(screen.getByRole("button", { name: "SW1" })).toHaveStyle({ backgroundColor: "rgb(255, 0, 0)" });
+    expect(bridge.getLiveMonitorInfo).toHaveBeenCalledTimes(1);
+    expect(bridge.getLiveLedFrame).toHaveBeenCalled();
+  });
+
+  it("keeps Studio editable and presents a safe preview when older firmware lacks the monitor", async () => {
+    await connectEditor(snapshot, false);
+
+    await waitFor(() =>
+      expect(screen.getByText("Monitor LED no disponible · vista previa segura")).toBeVisible(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Mapa de teclas" }));
+    expect(screen.getByRole("heading", { name: "Mapa de teclas" })).toBeVisible();
+  });
+
   it("stages an action locally, exposes undo, and writes only the selected key difference", async () => {
     await connectEditor();
 

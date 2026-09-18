@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   beginUnlock,
   connectAgentpad,
   disconnectAgentpad,
+  getLiveLedFrame,
+  getLiveMonitorInfo,
   getMacros,
   getVialRgb,
   listAgentpadDevices,
@@ -15,6 +17,7 @@ import {
   saveVialRgb,
 } from "./bridge";
 import { ChangeBar } from "./components/ChangeBar";
+import { LivePad, type LivePadMode } from "./components/LivePad";
 import { OaiLayoutEditor } from "./components/OaiLayoutEditor";
 import { arrangeOai, swapOai, OAI_HORIZONTAL, OAI_VERTICAL } from "./studio/oai-layout";
 import { DeviceConnectPanel } from "./components/DeviceConnectPanel";
@@ -35,6 +38,8 @@ import type {
   EncoderChange,
   EncoderDirection,
   KeyChange,
+  LiveLedFrame,
+  LiveMonitorInfo,
   MacroBuffer,
   PhysicalControl,
   StudioPage,
@@ -58,6 +63,7 @@ import {
 import type { DraftHistory, DraftState } from "./studio/editor-state";
 import { listProfiles, removeProfile, saveProfile } from "./studio/profile-store";
 import { LAYER_DETAILS } from "./studio/studio-data";
+import { freshnessFor, LIVE_MONITOR_INTERVAL_MS, shouldPollLiveMonitor } from "./studio/live-monitor";
 
 type Selection =
   | { kind: "key"; control: PhysicalControl }
@@ -271,6 +277,10 @@ function waitForUnlockPoll(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, 115));
 }
 
+function browserDocumentIsVisible(): boolean {
+  return typeof document === "undefined" || document.visibilityState !== "hidden";
+}
+
 function App() {
   const controls = useMemo(physicalControlsFromDefinition, []);
   const [page, setPage] = useState<StudioPage>("home");
@@ -278,6 +288,12 @@ function App() {
   const [selectedPath, setSelectedPath] = useState("");
   const [snapshot, setSnapshot] = useState<EditorSnapshot>();
   const [lighting, setLighting] = useState<VialRgbSnapshot>();
+  const [liveMonitorInfo, setLiveMonitorInfo] = useState<LiveMonitorInfo>();
+  const [liveFrame, setLiveFrame] = useState<LiveLedFrame>();
+  const [liveFrameReceivedAt, setLiveFrameReceivedAt] = useState<number>();
+  const [liveMonitorMode, setLiveMonitorMode] = useState<LivePadMode>("preview");
+  const [followPhysicalLayer, setFollowPhysicalLayer] = useState(true);
+  const [documentVisible, setDocumentVisible] = useState(browserDocumentIsVisible);
   const [macros, setMacros] = useState<MacroBuffer>();
   const [history, setHistory] = useState<DraftHistory<DraftState>>(emptyDraftHistory);
   const [activeLayer, setActiveLayer] = useState(0);
@@ -300,10 +316,17 @@ function App() {
       return false;
     }
   });
+  const liveRequestInFlight = useRef(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("high-contrast", highContrast);
   }, [highContrast]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => setDocumentVisible(browserDocumentIsVisible());
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
 
   const draft = history.present;
   const summaries = snapshot ? summarizeChanges(snapshot, draft) : [];
@@ -364,6 +387,71 @@ function App() {
     draft.encoderChanges.some(
       (change) => change.layer === activeLayer && change.direction === direction,
     );
+
+  function acceptLiveFrame(frame: LiveLedFrame): void {
+    setLiveFrame(frame);
+    setLiveFrameReceivedAt(Date.now());
+    setLiveMonitorMode("live");
+    if (followPhysicalLayer) {
+      setActiveLayer(frame.active_layer);
+      setSelection(undefined);
+    }
+  }
+
+  async function initializeLiveMonitor(): Promise<void> {
+    setLiveMonitorInfo(undefined);
+    setLiveFrame(undefined);
+    setLiveFrameReceivedAt(undefined);
+    setLiveMonitorMode("syncing");
+    try {
+      const info = await getLiveMonitorInfo();
+      setLiveMonitorInfo(info);
+      acceptLiveFrame(await getLiveLedFrame());
+    } catch {
+      setLiveMonitorMode("unsupported");
+    }
+  }
+
+  useEffect(() => {
+    if (!snapshot || !liveMonitorInfo) {
+      return;
+    }
+
+    let disposed = false;
+    const poll = async () => {
+      if (
+        disposed ||
+        !shouldPollLiveMonitor({
+          connected: Boolean(snapshot),
+          documentVisible,
+          saving,
+          unlockInProgress,
+          requestInFlight: liveRequestInFlight.current,
+        })
+      ) {
+        return;
+      }
+      liveRequestInFlight.current = true;
+      try {
+        const nextFrame = await getLiveLedFrame();
+        if (!disposed) {
+          acceptLiveFrame(nextFrame);
+        }
+      } catch {
+        if (!disposed) {
+          setLiveMonitorMode("syncing");
+        }
+      } finally {
+        liveRequestInFlight.current = false;
+      }
+    };
+
+    const interval = window.setInterval(() => void poll(), LIVE_MONITOR_INTERVAL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [snapshot, liveMonitorInfo, documentVisible, saving, unlockInProgress, followPhysicalLayer]);
 
   function confirmDraft(transform: (state: DraftState) => DraftState): void {
     setHistory((current) => ({
@@ -444,6 +532,7 @@ function App() {
       setPage("home");
       if (!nextSnapshot.unlockStatus.in_progress) {
         await loadDeviceExtras(nextSnapshot);
+        await initializeLiveMonitor();
       }
     } catch (caughtError) {
       setError(messageFrom(caughtError));
@@ -464,6 +553,10 @@ function App() {
       setSnapshot(undefined);
       setLighting(undefined);
       setMacros(undefined);
+      setLiveMonitorInfo(undefined);
+      setLiveFrame(undefined);
+      setLiveFrameReceivedAt(undefined);
+      setLiveMonitorMode("preview");
       setHistory(emptyDraftHistory());
       setSelection(undefined);
       setUnlockProgress(undefined);
@@ -601,6 +694,7 @@ function App() {
               : current,
           );
           await loadDeviceExtras(snapshot);
+          await initializeLiveMonitor();
           break;
         }
       }
@@ -629,6 +723,7 @@ function App() {
   }
 
   function selectLayer(layer: number): void {
+    setFollowPhysicalLayer(false);
     setActiveLayer(layer);
     setSelection(undefined);
   }
@@ -794,6 +889,25 @@ function App() {
       onSave={() => void saveChanges()}
       onUndo={() => setHistory((current) => undoDraft(current))}
       onRedo={() => setHistory((current) => redoDraft(current))}
+      monitor={
+        snapshot ? (
+          <LivePad
+            activeLayer={activeLayer}
+            controls={controls}
+            frame={liveFrame}
+            freshness={freshnessFor(liveFrameReceivedAt, Date.now())}
+            mode={liveMonitorMode}
+            followPhysicalLayer={followPhysicalLayer}
+            selectedId={selection?.kind === "key" ? selection.control.id : undefined}
+            onFollowPhysicalLayerChange={setFollowPhysicalLayer}
+            onSelectControl={(control) => {
+              setFollowPhysicalLayer(false);
+              setSelection({ kind: "key", control });
+              setPage("keymap");
+            }}
+          />
+        ) : undefined
+      }
     >
       {error ? (
         <p className="app-error" role="alert">
@@ -811,20 +925,15 @@ function App() {
             onSwap={(from, to) => setHistory(current => pushDraft(current, swapOai(snapshot, current.present, from, to)))}
           /> : null}
           <KeymapWorkspace
-            controls={controls}
             activeLayer={activeLayer}
-            selectedKeyId={selection?.kind === "key" ? selection.control.id : undefined}
             selectedEncoderDirection={
               selection?.kind === "encoder" ? selection.direction : undefined
             }
             selectedLabel={selectedLabel}
             selectedKeycode={selectedKeycode}
-            keycodeFor={keycodeFor}
             encoderKeycodeFor={encoderKeycodeFor}
-            isKeyDraft={isKeyDraft}
             isEncoderDraft={isEncoderDraft}
             onSelectLayer={selectLayer}
-            onSelectControl={(control) => setSelection({ kind: "key", control })}
             onSelectEncoder={(direction) => setSelection({ kind: "encoder", direction })}
             onAssign={stageKeycode}
           />

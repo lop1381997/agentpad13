@@ -53,6 +53,14 @@ The app does not inspect HID devices until you press **Buscar AgentPad13**.
 
 ## Studio functionality
 
+- A permanent virtual keyboard at the top of Studio mirrors all 24 physical
+  LEDs: 13 switch LEDs, the fixed layer marker and the peripheral LEDs. On
+  compatible firmware it reads atomic three-chunk Vial monitor frames at up to
+  20 FPS; it pauses while saving, during Vial unlock, with a hidden window or
+  while a previous read is in flight. Its buttons select controls for editing
+  only—they never send a key event or open OAI. You can follow the physical
+  active layer or pin a different layer to edit. Older firmware stays editable
+  and is clearly labelled as a safe preview.
 - Eight-layer map, physical controls and both encoder directions; local undo/redo.
 - Iluminación has its own layer selector. L0 describes protected Codex lighting;
   L1–L7 share the firmware's global VialRGB effect, speed, hue, saturation and brightness.
@@ -74,14 +82,20 @@ in [OAI-LAYOUT.md](OAI-LAYOUT.md). In Mapa de teclas → L0, choose horizontal,
 vertical or a two-key swap; review the draft and save. Presets restore the 13
 canonical actions; swaps preserve displaced assignments. Neither changes OAI HID.
 
-## Verification recorded through 2026-09-09
+**The real-time LED monitor requires a firmware rebuild that includes
+`0005-rgb-matrix-color-observer.patch`.** The checked-in 2026-09-07 candidate
+continues to support coupled OAI key/LED placement, but it predates the monitor;
+Studio will use preview mode with that UF2. Do not flash merely to test the app.
 
-34 frontend tests and 30 Rust tests passed on September 9, together with
-TypeScript/Vite and 175 firmware tests. Clippy and the macOS debug bundle passed
-in the preceding verification. WebKit flows passed using a simulated device;
-final source-to-render visual comparison and physical acceptance remain open.
-Native macOS Diagnostics export was verified using the real Save dialog on
-September 8. Windows/Linux builds and native dialogs remain unverified here.
+## Verification recorded through 2026-09-18
+
+41 frontend tests and 46 Rust tests passed on September 18, together with
+TypeScript/Vite and a native macOS binary build. The 32 firmware tests directly
+covering this feature and Phase 3 passed. The full firmware suite is not claimed
+as a fresh result because two concurrent emulator runs had to be stopped. The
+DMG wrapper reached macOS's graphical `osascript` packaging stage and needs an
+interactive Finder session to finish. Windows/Linux builds and native dialogs
+remain unverified here.
 The cross-platform workflow is now published on `codex/phase-3`; publication
 alone is not evidence of CI success. See [VERIFICATION.md](VERIFICATION.md).
 

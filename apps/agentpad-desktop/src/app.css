@@ -31,6 +31,33 @@ code, pre, .eyebrow, .connection-indicator, .change-indicator { font-family: "Je
 .studio-nav-item.is-active { border-left-color: var(--accent); background: var(--raised); color: #68f3dd; }
 .sidebar-contract { border-top: 1px solid var(--border); padding: 20px 12px 0; color: var(--muted); line-height: 1.7; }
 .studio-content { min-width: 0; padding: 28px; }
+.live-pad { margin-bottom: 24px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: linear-gradient(135deg, #0b1b28, #07131e); box-shadow: inset 0 1px 0 #ffffff08; }
+.live-pad.is-stale { opacity: .62; }
+.live-pad-heading, .live-pad-layer-mode { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.live-pad-heading h2 { margin: 4px 0 0; font-size: 16px; }
+.live-pad-status, .live-pad-layer-mode { margin: 0; color: var(--muted); font-size: 11px; }
+.live-pad-status { display: flex; align-items: center; gap: 8px; }
+.live-pad-dot { width: 8px; height: 8px; border-radius: 50%; background: #859490; box-shadow: 0 0 10px currentColor; }
+.live-pad-dot.live { color: var(--accent); background: var(--accent); }
+.live-pad-dot.preview { color: #c9b6ff; background: #c9b6ff; }
+.live-pad-dot.syncing { color: #f4b860; background: #f4b860; animation: live-pad-pulse .8s ease-in-out infinite alternate; }
+.live-pad-dot.unsupported { color: #95ccff; background: #95ccff; }
+.live-pad-layer-mode { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ffffff0d; }
+.live-pad-layer-mode strong { color: #d6e4f5; }
+.live-pad-layer-mode .text-button { padding: 4px 7px; color: #95ccff; }
+.live-pad-board { position: relative; max-width: 670px; margin: 18px auto 8px; padding: 26px 34px; border: 1px solid #38505c; border-radius: 20px; background: #04101a; }
+.live-pad-peripherals { position: absolute; inset: 9px; display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(2, 1fr); align-items: center; pointer-events: none; }
+.live-pad-led { justify-self: center; width: 9px; height: 9px; border: 1px solid #ffffff44; border-radius: 50%; box-shadow: 0 0 9px currentColor; }
+.live-pad-led:nth-child(n + 7) { grid-row: 2; }
+.live-pad-led.layer-indicator { width: 13px; height: 13px; border-color: #fff; }
+.live-pad-controls { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, 58px); gap: 7px; }
+.live-pad-control { border: 1px solid #ffffff52; border-radius: 8px; color: #fff; font-size: 10px; font-weight: 800; text-shadow: 0 1px 2px #000; box-shadow: inset 0 0 0 1px #0004, 0 2px 8px #0005; }
+.live-pad-control:hover { filter: brightness(1.2); }
+.live-pad-control.selected { outline: 2px solid #fff; outline-offset: 2px; }
+.live-pad-control.touch { grid-column: 1; }
+.live-pad-control.encoderPress { grid-column: 4; border-radius: 50%; }
+.live-pad-hint { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }
+@keyframes live-pad-pulse { from { opacity: .35; } to { opacity: 1; } }
 .workspace-heading { margin-bottom: 24px; }
 .workspace-heading h2 { margin: 6px 0 8px; font-size: 26px; font-weight: 600; letter-spacing: -.02em; }
 .workspace-heading p:not(.eyebrow) { color: var(--muted); line-height: 1.7; max-width: 760px; }
@@ -111,6 +138,7 @@ input[type=range] { padding: 0; accent-color: var(--accent); }
   .studio-header { flex-wrap: wrap; gap: 12px; }
   .studio-body { grid-template-columns: 190px minmax(0, 1fr); }
   .studio-content { padding: 20px; }
+  .live-pad-board { padding: 24px; }
   .keymap-layout { grid-template-columns: 1fr; }
   .diagnostics-grid { grid-template-columns: 1fr; }
 }
@@ -122,6 +150,9 @@ input[type=range] { padding: 0; accent-color: var(--accent); }
   .sidebar-contract { display: none; }
   .header-actions { flex-wrap: wrap; }
   .workspace-heading-row, .change-bar { align-items: stretch; flex-direction: column; }
+  .live-pad-heading, .live-pad-layer-mode { align-items: flex-start; flex-direction: column; }
+  .live-pad-board { margin-inline: 0; padding: 20px; }
+  .live-pad-controls { grid-template-rows: repeat(4, 48px); gap: 5px; }
   .home-status-grid, .lighting-facts, .macro-layout, .profiles-layout { grid-template-columns: 1fr; }
   .macro-slot-list { grid-template-columns: repeat(4, 1fr); max-height: 180px; }
   .device-picker, .profile-create-form { flex-wrap: wrap; }
