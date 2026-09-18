@@ -3,18 +3,18 @@
     "manufacturer": "hirlu",
     "product": "Codex Micro Lab OAI LED"
   },
-  "elf_sha256": "74067ae8741a12b4a6089dadd42527b686c6f1b463c558ac39bcaa6fa182fa2c",
+  "elf_sha256": "76b077091cf8e4deeebd9a72d3a9d784f3734d47a41196673aad86bd5bda09e0",
   "elf_size": {
     "bss": 265120,
     "data": 0,
-    "text": 62700
+    "text": 62964
   },
   "elf_uf2_equivalence": {
-    "elf_binary_size_bytes": 62700,
+    "elf_binary_size_bytes": 62964,
     "flash_base": "0x10000000",
     "status": "pass",
-    "trailing_zero_padding_bytes": 20,
-    "uf2_flash_size_bytes": 62720
+    "trailing_zero_padding_bytes": 12,
+    "uf2_flash_size_bytes": 62976
   },
   "emulator_evidence": {
     "channels_isolated": true,
@@ -55,7 +55,7 @@
         -486
       ],
       "axes_swung": true,
-      "report_count": 2,
+      "report_count": 3,
       "report_id": 7
     },
     "key_event": {
@@ -84,8 +84,8 @@
     },
     "task_status_fragment_count": 2,
     "thstatus_ack": true,
-    "uf2_sha256": "d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18",
-    "uf2_size_bytes": 125440,
+    "uf2_sha256": "7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e",
+    "uf2_size_bytes": 125952,
     "usb_enumerated": true,
     "vial_interface": {
       "report_bytes": 32,
@@ -115,8 +115,8 @@
     "encoder_update_user",
     "oai_raw_hid_receive"
   ],
-  "sha256": "d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18",
-  "size_bytes": 125440,
+  "sha256": "7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e",
+  "size_bytes": 125952,
   "status": "pass",
   "target": "loudest_micro:vial_oai",
   "usb_descriptor_contract": {

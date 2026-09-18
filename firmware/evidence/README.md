@@ -1,11 +1,10 @@
 # Evidence files
 
-## Current Phase-3 layout candidate — 2026-09-09 documentation
+## Current Phase-3 layout and live-monitor candidate
 
-`oai-layout-20260907-manifest.json` and `oai-layout-20260907-emulator.json`
-refer to `apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2`,
-125952 bytes, SHA-256
-`8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`.
+`dual-oai-vial-current-manifest.json` and `dual-oai-vial-emulator.json` refer
+to `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 125952 bytes,
+SHA-256 `7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`.
 The static verifier proves ELF/UF2 equivalence and USB descriptors; the emulator
 proves protocol isolation and input behavior, with synthetic configuration
 recovery explicitly excluded from descriptor proof. Actual LED permutations
@@ -23,7 +22,7 @@ new UF2 or overwrite a historical capture to make it appear newly validated.
 transport, `release/firmware/prebuilt/agentpad13_codex_oai.uf2`. It must match
 the UF2 SHA-256 and byte size recorded in `codex-oai-current-manifest.json`.
 The current port rebuild is 93,696 bytes with SHA-256
-`7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
+`c809dc4876a9b065cfbf22af0e10ee9dd18b3010fedd8095ec1ef88d0111c736`.
 
 `dual-oai-vial-emulator.json` is the current Task-5 capture for
 `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`. Together with its
@@ -35,8 +34,8 @@ OAI event/LED behavior and response isolation. Its `config_descriptor_recovery_u
 endpoint fields describe rp2040js transport recovery only; they are never
 configuration-descriptor proof. That proof is recorded by the ELF-derived
 static verifier in `dual-oai-vial-current-manifest.json`.
-The current dual rebuild is 125,440 bytes with SHA-256
-`d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18`.
+The current dual rebuild is 125,952 bytes with SHA-256
+`7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`.
 Its generated version metadata and Vial build ID are fixed by the verified
 builder.
 Its verifier manifest is `dual-oai-vial-current-manifest.json`.

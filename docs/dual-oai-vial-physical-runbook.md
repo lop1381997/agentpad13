@@ -7,9 +7,9 @@ authorize a flash or reset.
 
 ## Candidate and authorization
 
-- UF2: `apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2`
+- UF2: `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`
 - Size: **125952 bytes**
-- SHA-256: `8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`
+- SHA-256: `7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`
 - Vial definition: `release/firmware/prebuilt/agentpad13_oai_vial_dual.vial`
 - recovery UF2: `release/firmware/prebuilt/agentpad13_reference.uf2`
 - Recovery size: **93696 bytes**
@@ -17,7 +17,7 @@ authorize a flash or reset.
 
 Before each physical flash, obtain and retain this literal authorization:
 
-> I authorize one BOOTSEL flash of `apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2` on board `<board id>`, after verifying SHA-256 `8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda` and size 125952 bytes. I understand this candidate is not yet physically validated and authorize no other device operation.
+> I authorize one BOOTSEL flash of `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2` on board `<board id>`, after verifying SHA-256 `7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e` and size 125952 bytes. I understand this candidate is not yet physically validated and authorize no other device operation.
 
 Recovery requires a separate authorization, obtained only if the candidate
 fails to enumerate or is otherwise unsafe to continue testing:

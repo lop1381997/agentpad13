@@ -51,6 +51,10 @@ QMK_PATCHED_FILE_SHA256 = {
     "quantum/via.c": "48291b5dceb67de7daf7caad9db5399c69f463485203476ae4586814f3ad46f5",
     "quantum/via.h": "0a8ef108af7114bbc1da252f2017d7a9dc502750e6d75bd6506e1513ef226e7d",
 }
+QMK_VIA_BASE_SHA256 = {
+    "quantum/via.c": "f8d0220363b944b8826cefee178a825422e369e5cdf4f233a45a846a4eb40f63",
+    "quantum/via.h": "82cfa43bbc57818509735c3c567fe1ea7ea28284ad9aebf1cfda3fe34206e8a9",
+}
 QMK_DESCRIPTOR_BASE_SHA256 = {
     "tmk_core/protocol/usb_descriptor.c": "b5921e5311d40e50c5e4f88b133ba3b7cf10d4faa5cbd9c8da4ef4da7ba048aa",
     "tmk_core/protocol/usb_descriptor.h": "a75bb9a088e37ec51d88b8143c2cfce076dc02865c528be7591f15e566c2d477",
@@ -141,7 +145,10 @@ def validate_qmk_state(status: str, file_digests: Mapping[str, str]) -> str:
     patch123_status = patch12_status | frozenset(f" M {path}" for path in patch3_paths)
     patch1234_status = patch123_status | frozenset(f" M {path}" for path in patch4_paths)
     patch12345_status = patch1234_status | frozenset(f" M {path}" for path in patch5_paths)
-    if actual_status == patch1_status:
+    if not actual_status:
+        expected_digests = QMK_VIA_BASE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
+        state = "clean"
+    elif actual_status == patch1_status:
         expected_digests = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
         state = "patch-0001"
     elif actual_status == patch12_status:
@@ -212,7 +219,9 @@ def verify_qmk_source_state(qmk_home: Path) -> str:
     patch12345_status = patch1234_status | frozenset(
         f" M {path}" for path in QMK_RGB_MATRIX_OBSERVER_PATCHED_SHA256
     )
-    if actual_status == patch1_status:
+    if not actual_status:
+        paths = QMK_VIA_BASE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
+    elif actual_status == patch1_status:
         paths = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_BASE_SHA256
     elif actual_status == patch12_status:
         paths = QMK_PATCHED_FILE_SHA256 | QMK_DESCRIPTOR_PATCHED_SHA256
@@ -366,6 +375,7 @@ def apply_qmk_patches(qmk_home: Path) -> None:
     if state == "patch-0001+patch-0002+patch-0003+patch-0004+patch-0005":
         return
     patches = (
+        ("clean", VIA_COMMAND_PATCH, VIA_COMMAND_PATCH_SHA256, "repository patch 0001"),
         ("patch-0001", OAI_DESCRIPTOR_PATCH, OAI_DESCRIPTOR_PATCH_SHA256, "repository patch 0002"),
         ("patch-0001+patch-0002", DUAL_RAW_HID_PATCH, DUAL_RAW_HID_PATCH_SHA256, "repository patch 0003"),
         (

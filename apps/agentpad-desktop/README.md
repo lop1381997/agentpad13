@@ -82,14 +82,16 @@ in [OAI-LAYOUT.md](OAI-LAYOUT.md). In Mapa de teclas → L0, choose horizontal,
 vertical or a two-key swap; review the draft and save. Presets restore the 13
 canonical actions; swaps preserve displaced assignments. Neither changes OAI HID.
 
-**The real-time LED monitor requires a firmware rebuild that includes
-`0005-rgb-matrix-color-observer.patch`.** The checked-in 2026-09-07 candidate
-continues to support coupled OAI key/LED placement, but it predates the monitor;
-Studio will use preview mode with that UF2. Do not flash merely to test the app.
+**The real-time LED monitor requires the rebuilt dual firmware**
+[`agentpad13_oai_vial_dual.uf2`](../../release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2),
+which includes `0005-rgb-matrix-color-observer.patch` and Vial command `0x7D`.
+Older firmware remains editable but uses the clearly labelled preview state.
+The rebuilt artifact has emulator and static-verifier evidence; do not flash it
+without completing the explicit physical test runbook.
 
 ## Verification recorded through 2026-09-18
 
-41 frontend tests and 46 Rust tests passed on September 18, together with
+42 frontend tests and 46 Rust tests passed on September 18, together with
 TypeScript/Vite and a native macOS binary build. The 32 firmware tests directly
 covering this feature and Phase 3 passed. The full firmware suite is not claimed
 as a fresh result because two concurrent emulator runs had to be stopped. The
@@ -99,7 +101,8 @@ remain unverified here.
 The cross-platform workflow is now published on `codex/phase-3`; publication
 alone is not evidence of CI success. See [VERIFICATION.md](VERIFICATION.md).
 
-Physical acceptance: connect and unlock; remap one spare key and both encoder
+Physical acceptance: install the rebuilt dual UF2 only with explicit approval,
+then connect and unlock; remap one spare key and both encoder
 directions; save and reconnect to verify persistence; test a text macro; adjust
 VialRGB on L1 and confirm L0 lighting remains unchanged; export/import a profile;
 finally lock editing and disconnect. Keep Codex open to check OAI coexistence.

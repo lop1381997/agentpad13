@@ -8,9 +8,8 @@ para probar las nuevas funciones de Studio.
 ## Repositorio y entrega
 
 - Repositorio de trabajo: [lop1381997/agentpad13](https://github.com/lop1381997/agentpad13).
-- Rama remota de entrega: [codex/phase-3](https://github.com/lop1381997/agentpad13/tree/codex/phase-3).
-- Última entrega de código confirmada: `24d9ebd`, subida el 2026-09-09.
-- Rama local de desarrollo: `codex/oai-vial-eight-layers`.
+- Rama de desarrollo publicada: [codex/oai-vial-eight-layers](https://github.com/lop1381997/agentpad13/tree/codex/oai-vial-eight-layers).
+- La integración en `codex/phase-3` sigue pendiente de revisión y merge.
 - No se ha hecho merge en `main`. Esta revisión documental es posterior a esa entrega.
 - No se ha flasheado el teclado durante la preparación de esta entrega.
 
@@ -68,28 +67,30 @@ queda fijo con el color de capa en L1–L7, fuera del efecto VialRGB; sí partic
 en la transición. L3 incluye controles RGB por defecto en un mapa nuevo/reset;
 una EEPROM existente no se sobrescribe para introducirlos.
 
-## Firmware para probar tecla + luz
+## Firmware para probar tecla + luz y el monitor LED
 
-Usar [agentpad13_oai_vial_layout_20260907.uf2](../apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2):
+Usar [agentpad13_oai_vial_dual.uf2](../release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2):
 
 - Tamaño: **125952 bytes**.
-- SHA-256: `8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`.
+- SHA-256: `7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`.
 - Compilado contra QMK fijado en `00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb`,
   con Arm GNU 15.2.Rel1 y los parches del proyecto.
-- Evidencia: [manifiesto ELF/UF2](../firmware/evidence/oai-layout-20260907-manifest.json)
-  y [emulador dual](../firmware/evidence/oai-layout-20260907-emulator.json).
+- Incluye el observador RGB y la extensión Vial `0x7D` que necesita el teclado
+  virtual en tiempo real.
+- Evidencia: [manifiesto ELF/UF2](../firmware/evidence/dual-oai-vial-current-manifest.json)
+  y [emulador dual](../firmware/evidence/dual-oai-vial-emulator.json).
 
-El archivo `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2` es el candidato
-anterior de 125440 bytes: se conserva con sus hashes y evidencia propios, pero
-no contiene la nueva proyección de LEDs. El aún más antiguo
+El UF2 de esta sección fue reconstruido desde el QMK fijado y no se ha flasheado
+durante esta tarea: todavía requiere la prueba física autorizada. El más antiguo
 `agentpad13_vial_oai.uf2` usa el transporte `0xA6` obsoleto y no es compatible
 con el contrato dual actual. `agentpad13_codex_oai.uf2` es la alternativa Direct
-OAI sin Vial. El firmware base `agentpad13.uf2` y los archivos de fabricación
-siguen documentados por separado; no han sido sustituidos por este candidato.
+OAI sin Vial ni monitor. El firmware base `agentpad13.uf2` y los archivos de
+fabricación siguen documentados por separado; no han sido sustituidos por este
+candidato.
 
 ## Evidencia y pendientes
 
-Resultados del 2026-09-18: **41 tests frontend y 46 Rust** correctos, además de
+Resultados del 2026-09-18: **42 tests frontend y 46 Rust** correctos, además de
 TypeScript/Vite y la compilación del binario nativo macOS. Pasaron las 32 pruebas
 de firmware directamente implicadas (monitor, contrato Phase 3, Vial OAI,
 retorno a OAI y límite RGB). La batería completa se inició pero se detuvo porque
@@ -97,12 +98,10 @@ dos ejecuciones concurrentes de emulador quedaron esperando; no se cuenta como
 resultado completo. El empaquetado DMG alcanzó el binario y se detuvo en el paso
 gráfico `osascript`, que requiere una sesión de Finder interactiva.
 
-El nuevo firmware del monitor **todavía necesita una reconstrucción**. El
-worktree QMK local fijado no puede mapear su índice Git, por lo que el builder
-se detuvo antes de aplicar parches, compilar o publicar ningún UF2. El candidato
-de 2026-09-07 sigue siendo válido para tecla+luz, pero no expone el monitor LED
-en tiempo real; Studio mostrará su vista previa segura hasta instalar un UF2
-reconstruido.
+El builder se corrigió para aceptar el QMK limpio fijado, aplicar los cinco
+parches del repositorio en orden y publicar los dos UF2. Los perfiles Dual y
+Direct han pasado el smoke de rp2040js y el verificador estático ELF/UF2. No
+existe aún aceptación física de LEDs o teclado.
 
 El harness C comprueba 169 permutas de teclas y los LEDs reservados. El emulador
 comprueba comunicaciones y actividad WS2812, no colores físicos. Su recuperación
@@ -111,16 +110,14 @@ esa prueba corresponde al verificador estático del ELF.
 
 Pendientes antes de cerrar fase 3:
 
-1. Reparar o recrear el worktree QMK fijado, reconstruir el UF2 con el parche
-   `0005-rgb-matrix-color-observer.patch` y verificar el artefacto.
-2. Exportar perfil y probar el nuevo firmware en el teclado real, con autorización.
-3. Probar SW1 ↔ SW7 y vertical con agentes reales: estado LED y acción coincidentes.
-4. Guardar, bloquear, desconectar y reconectar: teclado operativo y mapa persistente.
-5. Confirmar que el teclado virtual sigue los colores físicos de L0–L7 y que
+1. Exportar perfil y probar el nuevo firmware en el teclado real, con autorización.
+2. Probar SW1 ↔ SW7 y vertical con agentes reales: estado LED y acción coincidentes.
+3. Guardar, bloquear, desconectar y reconectar: teclado operativo y mapa persistente.
+4. Confirmar que el teclado virtual sigue los colores físicos de L0–L7 y que
    no lee durante guardado, desbloqueo o pestaña oculta.
-6. Encoder, macros, RGB, indicador, retorno a OAI y convivencia con Codex.
-7. Comprobar resultados de CI y funcionamiento nativo en Windows/Linux.
-8. Terminar comparación visual con el HTML de Stitch y decidir el merge después.
+5. Encoder, macros, RGB, indicador, retorno a OAI y convivencia con Codex.
+6. Comprobar resultados de CI y funcionamiento nativo en Windows/Linux.
+7. Terminar comparación visual con el HTML de Stitch y decidir el merge después.
 
 ## Dónde está cada tema
 

@@ -233,7 +233,7 @@ Report-ID patches, initialized submodules, and Arm GNU Toolchain 15.2.Rel1. It
 publishes only
 [`release/firmware/prebuilt/agentpad13_codex_oai.uf2`](../../../../release/firmware/prebuilt/agentpad13_codex_oai.uf2)
 after clean builds pass. The current candidate is 93,696 bytes with SHA-256
-`7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
+`c809dc4876a9b065cfbf22af0e10ee9dd18b3010fedd8095ec1ef88d0111c736`.
 
 Run the complete host gate from the repository root with
 `python3 -m unittest discover -s firmware/tests/codex_oai -p 'test_*.py'`.

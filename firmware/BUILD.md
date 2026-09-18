@@ -154,27 +154,18 @@ Recorded results and the emulator-fidelity caveats are in
 
 ### AgentPad13 OAI + Vial dual HID (Phase-3 candidates)
 
-For the **current coupled key/LED candidate**, use
-`apps/agentpad-desktop/output/firmware/agentpad13_oai_vial_layout_20260907.uf2`
-(125952 bytes; SHA-256
-`8f4e0c1d245b79aded7f65fe4b5c5009c171db4e5b8eb32bfdc2f2516f4e4bda`).
-The corresponding `oai-layout-20260907-{emulator,manifest}.json` files live in
-`firmware/evidence/`. QMK commit `00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb`
-and Arm GNU 15.2.Rel1 were used. Build target remains `loudest_micro:vial_oai`;
-keep the exact ELF alongside each newly compiled UF2 for verification.
+For the **current coupled key/LED and live-monitor candidate**, use
+`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2` (125,952 bytes;
+SHA-256 `7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`).
+The corresponding `dual-oai-vial-{emulator,current-manifest}.json` files live
+in `firmware/evidence/`. QMK commit `00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb`
+and Arm GNU 15.2.Rel1 were used. Build target remains `loudest_micro:vial_oai`.
 The new projection reads the persistent L0 keymap and moves colors with OAI
 actions across SW1–SW13. It does not alter descriptors, startup/transition
 ownership, TP5 or underglow positions. Physical acceptance remains pending.
 See [current status](../docs/PHASE-3-STATUS.md) and
 [layout guide](../apps/agentpad-desktop/OAI-LAYOUT.md).
 
-The following hash and reproducibility record refer only to the **preceding
-Task-5 artifact**, not to a rebuild of the newer source. Do not relabel the
-old evidence or assume two-build reproducibility was rerun for the new UF2.
-
-The preserved Task-5 candidate is
-`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 125,440 bytes, SHA-256
-`d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18`.
 Its paired Vial definition is
 `release/firmware/prebuilt/agentpad13_oai_vial_dual.vial`. It keeps the Direct
 OAI identity and wire contract (`303A:8360`, `FF00:61`, Report ID 6, 64-byte
@@ -196,10 +187,10 @@ Pressing **SW1 + SW4** together (the physical positions `[0,0]` and `[0,3]`)
 returns to OAI/Codex layer 0 from any layer. The firmware uses an 80 ms
 physical-chord window so Vial remaps cannot disable it. Vial's separate
 SW1+SW13 unlock procedure remains available while its unlock check runs.
-The candidate is byte-reproducible: two clean builds with the pinned compiler
-produced this same SHA-256. The builder fixes QMK's generated version metadata
-and Vial `BUILD_ID` for this target, so the result does not depend on a clock
-or random build identifier.
+The clean-source builder verifies exact file digests before applying all five
+repository patches, then fixes QMK's generated version metadata and Vial
+`BUILD_ID`. Its current artifact was checked against the produced UF2, the
+rp2040js dual smoke and the ELF-derived static verifier.
 Physical validation is pending; use
 `docs/dual-oai-vial-physical-runbook.md` for the gated manual procedure.
 
@@ -256,7 +247,7 @@ python3 firmware/tools/build_codex_oai.py \
 
 The current output is
 `release/firmware/prebuilt/agentpad13_codex_oai.uf2`, 93,696 bytes, SHA-256
-`7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
+`c809dc4876a9b065cfbf22af0e10ee9dd18b3010fedd8095ec1ef88d0111c736`.
 Run the complete host and emulator gates from the repository root:
 
 ```sh

@@ -34,7 +34,7 @@ board.
 Current build candidate (still unflashed):
 `release/firmware/prebuilt/agentpad13_codex_oai.uf2`, UF2 `93696` bytes,
 SHA-256
-`7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e`.
+`c809dc4876a9b065cfbf22af0e10ee9dd18b3010fedd8095ec1ef88d0111c736`.
 
 ## Pre-flight, manual only
 

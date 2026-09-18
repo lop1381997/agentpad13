@@ -1,7 +1,7 @@
 {
-  "uf2_blocks": 245,
-  "uf2_size_bytes": 125440,
-  "uf2_sha256": "d254583c0366b029f1a09531c6cc7f286b21a77a97b565a846cf48ed480aca18",
+  "uf2_blocks": 246,
+  "uf2_size_bytes": 125952,
+  "uf2_sha256": "7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e",
   "usb_enumerated": true,
   "vid_pid": "303a:8360",
   "vial_interface": {
@@ -57,7 +57,7 @@
   },
   "joystick_report_behavior": {
     "report_id": 7,
-    "report_count": 2,
+    "report_count": 3,
     "axes_a": [
       -486,
       488
@@ -124,9 +124,9 @@
     "[267.2ms] USB reset",
     "[600.1ms] vial IN 32B",
     "[600.2ms] oai IN 64B",
-    "[1120.0ms] vial IN 32B",
+    "[1120.1ms] vial IN 32B",
     "[1390.2ms] oai IN 64B",
-    "[1910.2ms] oai IN 64B",
+    "[1910.1ms] oai IN 64B",
     "[2184.4ms] oai IN 64B",
     "[2480.1ms] vial IN 32B",
     "[2930.1ms] oai IN 64B",
@@ -138,7 +138,8 @@
     "[3980.3ms] vial IN 32B",
     "[4234.4ms] hid0 IN 9B",
     "[4234.4ms] hid0 IN 9B",
-    "[4530.0ms] hid0 IN 5B",
-    "[5230.0ms] hid0 IN 5B"
+    "[4530.1ms] hid0 IN 5B",
+    "[5230.0ms] hid0 IN 5B",
+    "[5230.1ms] hid0 IN 5B"
   ]
 }

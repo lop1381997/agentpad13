@@ -1,6 +1,6 @@
 {
   "device_identity": {},
-  "elf_sha256": "2d1d0ee835e1dc9c5b30ad19c7cbefd3477b870193b2307b7d2e0f4e97153e58",
+  "elf_sha256": "322328c6978e29b92e5f8a9196f08adc18b9e653a81cb80c496c9f3e3aeb63e7",
   "elf_size": {
     "bss": 265376,
     "data": 0,
@@ -28,7 +28,7 @@
     "rgbcfg_ack": true,
     "task_status_fragment_count": 2,
     "thstatus_ack": true,
-    "uf2_sha256": "7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e",
+    "uf2_sha256": "c809dc4876a9b065cfbf22af0e10ee9dd18b3010fedd8095ec1ef88d0111c736",
     "uf2_size_bytes": 93696,
     "usb_enumerated": true,
     "ws2812_activity": true
@@ -41,7 +41,7 @@
     "encoder_update_user",
     "raw_hid_receive"
   ],
-  "sha256": "7c41bbdd32bfbe89bebb3bef55ba0d04fe8893f0b2799411d58ebd605d7a9f4e",
+  "sha256": "c809dc4876a9b065cfbf22af0e10ee9dd18b3010fedd8095ec1ef88d0111c736",
   "size_bytes": 93696,
   "status": "pass",
   "target": "loudest_micro:codex_oai",

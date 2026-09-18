@@ -72,6 +72,16 @@ class BuildToolSafetyTest(unittest.TestCase):
         with self.assertRaisesRegex(BuildError, "unexpected QMK modification"):
             validate(status, valid_digests)
 
+    def test_qmk_state_accepts_the_exact_clean_pinned_source(self) -> None:
+        clean_digests = {
+            "quantum/via.c": "f8d0220363b944b8826cefee178a825422e369e5cdf4f233a45a846a4eb40f63",
+            "quantum/via.h": "82cfa43bbc57818509735c3c567fe1ea7ea28284ad9aebf1cfda3fe34206e8a9",
+            "tmk_core/protocol/usb_descriptor.c": "b5921e5311d40e50c5e4f88b133ba3b7cf10d4faa5cbd9c8da4ef4da7ba048aa",
+            "tmk_core/protocol/usb_descriptor.h": "a75bb9a088e37ec51d88b8143c2cfce076dc02865c528be7591f15e566c2d477",
+        }
+
+        self.assertEqual(builder.validate_qmk_state("", clean_digests), "clean")
+
     def test_qmk_state_rejects_modified_content_at_allowed_path(self) -> None:
         status = (
             " M quantum/via.c\n"
@@ -227,6 +237,23 @@ class BuildToolSafetyTest(unittest.TestCase):
             apply_qmk_patches(self.fake_qmk)
 
         self.assertEqual(applied, list(patch_paths))
+
+    def test_builder_applies_all_repository_patches_from_clean_qmk(self) -> None:
+        with mock.patch.object(builder, "verify_qmk_source_state", return_value="clean"), mock.patch.object(
+            builder, "_git_apply_check", return_value=True
+        ), mock.patch.object(builder, "_run") as runner:
+            apply_qmk_patches(self.fake_qmk)
+
+        self.assertEqual(
+            [call.args[0][-1] for call in runner.call_args_list],
+            [
+                str(builder.VIA_COMMAND_PATCH),
+                str(builder.OAI_DESCRIPTOR_PATCH),
+                str(builder.DUAL_RAW_HID_PATCH),
+                str(builder.DETERMINISTIC_BUILD_ID_PATCH),
+                str(builder.RGB_MATRIX_OBSERVER_PATCH),
+            ],
+        )
 
     def test_builder_applies_remaining_deterministic_and_observer_patches_for_verified_three_patch_state(self) -> None:
         with mock.patch.object(
