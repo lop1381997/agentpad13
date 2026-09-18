@@ -116,6 +116,17 @@ class Phase3ReleaseContractTest(unittest.TestCase):
         self.assertEqual(evidence["vial_interface"], {"usage": "ff60:0061", "report_id": None, "report_bytes": 32})
         self.assertTrue(evidence["oai_hid_enumerated"])
         self.assertTrue(evidence["vial_protocol_ack"])
+        self.assertEqual(
+            evidence["live_monitor_info"],
+            {
+                "major": 1,
+                "minor": 0,
+                "led_count": 24,
+                "chunk_led_count": 8,
+                "chunk_count": 3,
+                "maximum_fps": 20,
+            },
+        )
         self.assertTrue(evidence["channels_isolated"])
         self.assertEqual(evidence["device_identity"], {"manufacturer": "hirlu", "product": "Codex Micro Lab OAI LED"})
         self.assertEqual(evidence["shared_keyboard_joystick_endpoint"], {"keyboard_endpoint": 5, "joystick_endpoint": 5})

@@ -2,7 +2,7 @@
 
 ## Actualización de alcance — 2026-09-09
 
-Este procedimiento sigue siendo exclusivo de `codex_oai` (Direct OAI sin Vial). Para probar Studio y el movimiento conjunto tecla/LED usar `docs/dual-oai-vial-physical-runbook.md` y su candidato de 125952 bytes. No intercambiar sus UF2 ni usar una autorización para otro artefacto.
+Este procedimiento sigue siendo exclusivo de `codex_oai` (Direct OAI sin Vial). Para probar Studio y el movimiento conjunto tecla/LED usar `docs/dual-oai-vial-physical-runbook.md` y su candidato de 126976 bytes. No intercambiar sus UF2 ni usar una autorización para otro artefacto.
 
 Referencia: [estado vigente de fase 3](PHASE-3-STATUS.md).
 

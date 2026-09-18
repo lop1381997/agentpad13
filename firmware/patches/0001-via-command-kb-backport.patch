@@ -2,23 +2,22 @@ diff --git a/quantum/via.c b/quantum/via.c
 index 1911c4a579..ba9045b7ae 100644
 --- a/quantum/via.c
 +++ b/quantum/via.c
-@@ -201,6 +201,15 @@ __attribute__((weak)) void raw_hid_receive_kb(uint8_t *data, uint8_t length) {
+@@ -201,6 +201,14 @@ __attribute__((weak)) void raw_hid_receive_kb(uint8_t *data, uint8_t length) {
      *command_id         = id_unhandled;
  }
  
 +// Backport of upstream QMK's via_command_kb() pre-hook (added upstream after
-+// this fork point). Keyboard level code can override this to intercept raw
-+// HID frames before VIA's command switch runs - the only way to receive
-+// command IDs that VIA would otherwise consume itself. Return true when the
-+// frame was fully handled, including any raw_hid_send() reply.
-+__attribute__((weak)) bool via_command_kb(uint8_t *data, uint8_t length) {
-+    return false;
-+}
++// this fork point).  This must remain an undefined weak reference rather
++// than a weak false-returning definition: with LTO enabled the compiler can
++// otherwise fold the local definition into raw_hid_receive() and discard a
++// keyboard-level override.  A missing hook is simply skipped; a keyboard
++// implementation intercepts frames before VIA's command switch.
++extern bool via_command_kb(uint8_t *data, uint8_t length) __attribute__((weak));
 +
  // VIA handles received HID messages first, and will route to
  // raw_hid_receive_kb() for command IDs that are not handled here.
  // This gives the keyboard code level the ability to handle the command
-@@ -223,6 +232,14 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
+@@ -223,6 +231,14 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
      }
  #endif
  
@@ -26,7 +25,7 @@ index 1911c4a579..ba9045b7ae 100644
 +    // (including any reply), VIA must not process or echo it. Deliberately
 +    // placed after the Vial unlock gate so the restricted command subset
 +    // during an unlock sequence is preserved.
-+    if (via_command_kb(data, length)) {
++    if (via_command_kb != NULL && via_command_kb(data, length)) {
 +        return;
 +    }
 +

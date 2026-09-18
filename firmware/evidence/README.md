@@ -3,8 +3,8 @@
 ## Current Phase-3 layout and live-monitor candidate
 
 `dual-oai-vial-current-manifest.json` and `dual-oai-vial-emulator.json` refer
-to `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 125952 bytes,
-SHA-256 `7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`.
+to `release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2`, 126976 bytes,
+SHA-256 `66dd5e2e630577ef0c14282fc6bc0aed0f04fe7bf5c1b716ea6feda7d7252149`.
 The static verifier proves ELF/UF2 equivalence and USB descriptors; the emulator
 proves protocol isolation and input behavior, with synthetic configuration
 recovery explicitly excluded from descriptor proof. Actual LED permutations
@@ -34,8 +34,8 @@ OAI event/LED behavior and response isolation. Its `config_descriptor_recovery_u
 endpoint fields describe rp2040js transport recovery only; they are never
 configuration-descriptor proof. That proof is recorded by the ELF-derived
 static verifier in `dual-oai-vial-current-manifest.json`.
-The current dual rebuild is 125,952 bytes with SHA-256
-`7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`.
+The current dual rebuild is 126,976 bytes with SHA-256
+`66dd5e2e630577ef0c14282fc6bc0aed0f04fe7bf5c1b716ea6feda7d7252149`.
 Its generated version metadata and Vial build ID are fixed by the verified
 builder.
 Its verifier manifest is `dual-oai-vial-current-manifest.json`.

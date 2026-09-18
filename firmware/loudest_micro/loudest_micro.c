@@ -42,6 +42,19 @@
 #    include "keymaps/vial_oai/live_monitor.h"
 #endif
 
+#if defined(VIA_ENABLE) && defined(CODEX_OAI_DYNAMIC_KEYMAP)
+// The combined firmware owns a separate OAI Raw HID interface, so its
+// keyboard-level status receiver below is intentionally excluded.  Vial's
+// pre-hook must nevertheless remain compiled here: it is the sole Vial-channel
+// entry point for the read-only 0x7D live LED monitor command.
+bool via_command_kb(uint8_t *data, uint8_t length) {
+    if (agentpad_live_monitor_via_command(data, length)) {
+        return true;
+    }
+    return false;
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // Layer count (bound for SET_LAYER). Vial supplies DYNAMIC_KEYMAP_LAYER_COUNT;
 // the plain QMK keymap defines 8 layers in its keymaps[] array.
@@ -416,12 +429,8 @@ static bool loudest_tail_zero(const uint8_t *data, uint8_t from, uint8_t upto) {
     return true;
 }
 
+#if !defined(CODEX_OAI_DYNAMIC_KEYMAP)
 bool via_command_kb(uint8_t *data, uint8_t length) {
-#if defined(CODEX_OAI_DYNAMIC_KEYMAP)
-    if (agentpad_live_monitor_via_command(data, length)) {
-        return true;
-    }
-#endif
     switch (data[0]) {
         case LOUDEST_CMD_SET_KEY:
             if (length >= 6 && data[1] < LOUDEST_LED_COUNT && data[5] <= LOUDEST_FX_BLINK && loudest_tail_zero(data, 6, length) && !loudest_tail_zero(data, 1, 6)) {
@@ -460,6 +469,7 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
             return false; // everything else (incl. 0xFE vial prefix) is VIA's
     }
 }
+#endif
 
 // Fallback for frames VIA's inner switches forward (e.g. a get_keyboard_value
 // id VIA does not know). The bounds checks in loudest_status_handle() make

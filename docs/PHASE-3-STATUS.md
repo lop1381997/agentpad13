@@ -9,7 +9,7 @@ para probar las nuevas funciones de Studio.
 
 - Repositorio de trabajo: [lop1381997/agentpad13](https://github.com/lop1381997/agentpad13).
 - Rama de desarrollo publicada: [codex/oai-vial-eight-layers](https://github.com/lop1381997/agentpad13/tree/codex/oai-vial-eight-layers).
-- La integración en `codex/phase-3` sigue pendiente de revisión y merge.
+- La integración está publicada en `codex/phase-3` mediante avance rápido.
 - No se ha hecho merge en `main`. Esta revisión documental es posterior a esa entrega.
 - No se ha flasheado el teclado durante la preparación de esta entrega.
 
@@ -71,12 +71,13 @@ una EEPROM existente no se sobrescribe para introducirlos.
 
 Usar [agentpad13_oai_vial_dual.uf2](../release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2):
 
-- Tamaño: **125952 bytes**.
-- SHA-256: `7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`.
+- Tamaño: **126976 bytes**.
+- SHA-256: `66dd5e2e630577ef0c14282fc6bc0aed0f04fe7bf5c1b716ea6feda7d7252149`.
 - Compilado contra QMK fijado en `00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb`,
   con Arm GNU 15.2.Rel1 y los parches del proyecto.
 - Incluye el observador RGB y la extensión Vial `0x7D` que necesita el teclado
-  virtual en tiempo real.
+  virtual en tiempo real. La prueba dual verifica explícitamente su respuesta
+  `v1`, los 24 LEDs, tres bloques de ocho y el límite de 20 FPS.
 - Evidencia: [manifiesto ELF/UF2](../firmware/evidence/dual-oai-vial-current-manifest.json)
   y [emulador dual](../firmware/evidence/dual-oai-vial-emulator.json).
 

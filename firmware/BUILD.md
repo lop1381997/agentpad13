@@ -155,8 +155,8 @@ Recorded results and the emulator-fidelity caveats are in
 ### AgentPad13 OAI + Vial dual HID (Phase-3 candidates)
 
 For the **current coupled key/LED and live-monitor candidate**, use
-`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2` (125,952 bytes;
-SHA-256 `7f89f40e76b653fbef2ac0fe01d922d48275bd26ba1a633548a4baaae838702e`).
+`release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2` (126,976 bytes;
+SHA-256 `66dd5e2e630577ef0c14282fc6bc0aed0f04fe7bf5c1b716ea6feda7d7252149`).
 The corresponding `dual-oai-vial-{emulator,current-manifest}.json` files live
 in `firmware/evidence/`. QMK commit `00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb`
 and Arm GNU 15.2.Rel1 were used. Build target remains `loudest_micro:vial_oai`.

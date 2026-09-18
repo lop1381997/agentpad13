@@ -206,7 +206,7 @@ function reportDescriptorSetup(interfaceNumber, reportLength) {
 }
 
 function routeFrame(frame, channels) {
-  if (frame.length === channels.vial.inBytes && [0x01, 0x04, 0x05, 0x0c, 0x0d, 0xfe].includes(frame[0])) return 'vial';
+  if (frame.length === channels.vial.inBytes && [0x01, 0x04, 0x05, 0x0c, 0x0d, 0x7d, 0xfe].includes(frame[0])) return 'vial';
   if (frame.length === channels.oai.inBytes && frame[0] === OAI_REPORT_ID && frame[1] === 2) return 'oai';
   return null;
 }
@@ -627,6 +627,22 @@ function main() {
   const keycodeFrame = vialFrames().slice(beforeKeycode).find((frame) => frame[0] === 0x04);
   const vialDefaultK00 = keycodeFrame ? (keycodeFrame[4] << 8) | keycodeFrame[5] : null;
 
+  const liveMonitorInfoRequest = Buffer.alloc(VIAL_REPORT_BYTES);
+  liveMonitorInfoRequest[0] = 0x7d;
+  liveMonitorInfoRequest[1] = 0x01;
+  const liveMonitorInfoFrame = vialRequest(
+    liveMonitorInfoRequest,
+    (frame) => frame[0] === 0x7d && frame[1] === 0x01,
+  );
+  const liveMonitorInfo = liveMonitorInfoFrame ? {
+    major: liveMonitorInfoFrame[2],
+    minor: liveMonitorInfoFrame[3],
+    led_count: liveMonitorInfoFrame[4],
+    chunk_led_count: liveMonitorInfoFrame[5],
+    chunk_count: liveMonitorInfoFrame[6],
+    maximum_fps: liveMonitorInfoFrame[7],
+  } : null;
+
   const edgesBeforeStatus = gp17Edges;
   const visibleStatus = { id: 0, c: 3162110, e: 4, b: 1, s: 0.5 };
   const thstatusResult = rpc(
@@ -790,6 +806,7 @@ function main() {
     device_identity: { manufacturer: manufacturerString, product: productString },
     vial_protocol_ack: vialProtocolAck,
     vial_default_k00: vialDefaultK00,
+    live_monitor_info: liveMonitorInfo,
     rgbcfg_ack: rgbcfgResult.acknowledged,
     thstatus_ack: thstatusResult.acknowledged,
     device_status_ack: deviceStatusAck,
@@ -807,7 +824,7 @@ function main() {
   activeDeadline.check();
   const checkNames = [
     'vid_pid', 'report_descriptors_verified', 'keyboard_hid_enumerated',
-    'oai_hid_enumerated', 'vial_protocol_ack', 'vial_default_k00',
+    'oai_hid_enumerated', 'vial_protocol_ack', 'vial_default_k00', 'live_monitor_info',
     'rgbcfg_ack', 'thstatus_ack', 'device_status_ack',
     'task_status_fragment_count', 'key_event', 'manufacturer', 'product',
     'ws2812_activity', 'channels_isolated', 'encoder_rotation_behavior',
@@ -815,7 +832,11 @@ function main() {
   const checks = [
     evidence.vid_pid === '303a:8360', evidence.report_descriptors_verified,
     evidence.keyboard_hid_enumerated, evidence.oai_hid_enumerated, evidence.vial_protocol_ack,
-    evidence.vial_default_k00 !== null, evidence.rgbcfg_ack,
+    evidence.vial_default_k00 !== null,
+    evidence.live_monitor_info !== null && evidence.live_monitor_info.major === 1 &&
+      evidence.live_monitor_info.led_count === 24 && evidence.live_monitor_info.chunk_led_count === 8 &&
+      evidence.live_monitor_info.chunk_count === 3 && evidence.live_monitor_info.maximum_fps === 20,
+    evidence.rgbcfg_ack,
     evidence.thstatus_ack, evidence.device_status_ack,
     evidence.task_status_fragment_count > 1, evidence.key_event !== null,
     evidence.device_identity.manufacturer === 'hirlu', evidence.device_identity.product === 'Codex Micro Lab OAI LED',

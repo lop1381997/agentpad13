@@ -56,7 +56,7 @@ class BuildToolSafetyTest(unittest.TestCase):
 
     def test_qmk_state_rejects_extra_modifications(self) -> None:
         valid_digests = {
-            "quantum/via.c": "48291b5dceb67de7daf7caad9db5399c69f463485203476ae4586814f3ad46f5",
+            "quantum/via.c": "0f96f14e93967bd1ab161d58b203c5341265af802f65c0eba70ee14801ffc125",
             "quantum/via.h": "0a8ef108af7114bbc1da252f2017d7a9dc502750e6d75bd6506e1513ef226e7d",
             "tmk_core/protocol/usb_descriptor.c": "09f655faea016c21e2318d1f34d1345b2e8424f64f064f1a92ef6be7118cf5e3",
             "tmk_core/protocol/usb_descriptor.h": "2e8dc4cd1edf372b6ffd1308a1e9e7c42bda07642c0d373a7b3e124103b9339e",

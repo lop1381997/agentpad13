@@ -42,13 +42,13 @@ OAI_DESCRIPTOR_PATCH = REPO_ROOT / "firmware" / "patches" / "0002-raw-hid-report
 DUAL_RAW_HID_PATCH = REPO_ROOT / "firmware" / "patches" / "0003-dual-raw-hid-chibios.patch"
 DETERMINISTIC_BUILD_ID_PATCH = REPO_ROOT / "firmware" / "patches" / "0004-deterministic-vial-build-id.patch"
 RGB_MATRIX_OBSERVER_PATCH = REPO_ROOT / "firmware" / "patches" / "0005-rgb-matrix-color-observer.patch"
-VIA_COMMAND_PATCH_SHA256 = "b12c375f7de6361fb2b26ecd003b0ffd717fb54d1441f37574866c86f473268c"
+VIA_COMMAND_PATCH_SHA256 = "6a4906dd8ff19a345fbec383d4aa1e6945e8d5b4e5ded7268d5c0acdbab8d799"
 OAI_DESCRIPTOR_PATCH_SHA256 = "48eb5211383c8aa338e5b266b34cb3a90fc97cccc5586754f35d54a7bfdac002"
 DUAL_RAW_HID_PATCH_SHA256 = "ab1d1f51d34c95cc40d0e9f5a2df46089dc02304500f3cc50958db3c31874ccb"
 DETERMINISTIC_BUILD_ID_PATCH_SHA256 = "9b28d2b484b3536fe9c9bbb95ae7acbcebf566fedf99cb5a732cbcc62d333beb"
 RGB_MATRIX_OBSERVER_PATCH_SHA256 = "1427d64e95053fd7db9c1b2b1f763dcf0ee5ced00ac125418427072ddbd07511"
 QMK_PATCHED_FILE_SHA256 = {
-    "quantum/via.c": "48291b5dceb67de7daf7caad9db5399c69f463485203476ae4586814f3ad46f5",
+    "quantum/via.c": "0f96f14e93967bd1ab161d58b203c5341265af802f65c0eba70ee14801ffc125",
     "quantum/via.h": "0a8ef108af7114bbc1da252f2017d7a9dc502750e6d75bd6506e1513ef226e7d",
 }
 QMK_VIA_BASE_SHA256 = {
