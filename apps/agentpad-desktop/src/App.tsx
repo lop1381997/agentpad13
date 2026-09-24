@@ -814,11 +814,10 @@ function App() {
   const home = (
     <section className="home-workspace" aria-labelledby="home-title">
       <div className="workspace-heading">
-        <p className="eyebrow">Configuración nativa para AgentPad13</p>
-        <h2 id="home-title">Controla Vial sin tocar el canal OAI</h2>
+        <p className="eyebrow">Tu espacio de configuración</p>
+        <h2 id="home-title">Tu AgentPad13, a tu manera.</h2>
         <p>
-          Conecta el dispositivo, completa el desbloqueo físico de Vial y prepara los cambios
-          localmente antes de guardarlos de forma explícita.
+          Personaliza teclas, capas e iluminación. Revisa tus cambios antes de guardarlos en el teclado.
         </p>
       </div>
 
@@ -920,10 +919,6 @@ function App() {
       {page === "keymap" ? (
         snapshot ? (
           <>
-          {activeLayer === 0 ? <OaiLayoutEditor disabled={saving}
-            onArrange={(vertical) => setHistory(current => pushDraft(current, arrangeOai(snapshot, current.present, vertical ? OAI_VERTICAL : OAI_HORIZONTAL)))}
-            onSwap={(from, to) => setHistory(current => pushDraft(current, swapOai(snapshot, current.present, from, to)))}
-          /> : null}
           <KeymapWorkspace
             activeLayer={activeLayer}
             selectedEncoderDirection={
@@ -936,6 +931,10 @@ function App() {
             onSelectLayer={selectLayer}
             onSelectEncoder={(direction) => setSelection({ kind: "encoder", direction })}
             onAssign={stageKeycode}
+            oaiEditor={activeLayer === 0 ? <OaiLayoutEditor disabled={saving}
+              onArrange={(vertical) => setHistory(current => pushDraft(current, arrangeOai(snapshot, current.present, vertical ? OAI_VERTICAL : OAI_HORIZONTAL)))}
+              onSwap={(from, to) => setHistory(current => pushDraft(current, swapOai(snapshot, current.present, from, to)))}
+            /> : undefined}
           />
           </>
         ) : (

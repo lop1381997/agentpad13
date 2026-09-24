@@ -53,6 +53,14 @@ The app does not inspect HID devices until you press **Buscar AgentPad13**.
 
 ## Studio functionality
 
+The Studio interface follows the desktop hierarchy recommended by Apple's
+[macOS design guidance](https://developer.apple.com/design/human-interface-guidelines/designing-for-macos/):
+a persistent sidebar, compact toolbar, clear page headings and restrained
+accent colour. It follows the operating system's light or dark appearance,
+supports the existing high-contrast preference and reduces decorative motion
+when the system requests it. These presentation choices apply on Windows and
+Linux too; HID behaviour and save semantics are unchanged.
+
 - A permanent virtual keyboard at the top of Studio mirrors all 24 physical
   LEDs: 13 switch LEDs, the fixed layer marker and the peripheral LEDs. On
   compatible firmware it reads atomic three-chunk Vial monitor frames at up to
@@ -90,6 +98,12 @@ The rebuilt artifact has emulator and static-verifier evidence; do not flash it
 without completing the explicit physical test runbook.
 
 ## Verification recorded through 2026-09-18
+
+For the 2026-09-24 interface refresh, 43 frontend tests, the TypeScript/Vite
+build and the native macOS debug `.app` and `.dmg` builds passed locally.
+The UI was inspected in the browser in system dark appearance and with the
+high-contrast setting. Windows/Linux native appearance still needs inspection
+on those platforms; this visual change does not claim fresh firmware testing.
 
 42 frontend tests and 46 Rust tests passed on September 18, together with
 TypeScript/Vite and a native macOS binary build. The 32 firmware tests directly

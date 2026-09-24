@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { EncoderEditor } from "./EncoderEditor";
 import { KeyPalette } from "./KeyPalette";
 import { layerDetail } from "../studio/studio-data";
@@ -13,6 +14,7 @@ type KeymapWorkspaceProps = {
   onSelectLayer: (layer: number) => void;
   onSelectEncoder: (direction: EncoderDirection) => void;
   onAssign: (keycode: number) => void;
+  oaiEditor?: ReactNode;
 };
 
 export function KeymapWorkspace({
@@ -25,6 +27,7 @@ export function KeymapWorkspace({
   onSelectLayer,
   onSelectEncoder,
   onAssign,
+  oaiEditor,
 }: KeymapWorkspaceProps) {
   return (
     <section className="keymap-workspace" aria-labelledby="keymap-title">
@@ -55,6 +58,8 @@ export function KeymapWorkspace({
           );
         })}
       </div>
+
+      {oaiEditor}
 
       <div className="keymap-layout">
         <article className="hardware-deck">

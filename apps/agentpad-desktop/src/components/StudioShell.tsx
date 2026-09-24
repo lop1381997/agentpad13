@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { ReactNode } from "react";
 import {
   IconAdjustments,
@@ -56,6 +57,7 @@ export function StudioShell({
   children,
 }: StudioShellProps) {
   const saveDisabled = !connected || !unlocked || changeCount === 0 || saving;
+  const navigationButtons = useRef<Array<HTMLButtonElement | null>>([]);
 
   const navigateByKeyboard = (current: number, key: string) => {
     let target = current;
@@ -70,90 +72,81 @@ export function StudioShell({
     } else {
       return;
     }
+    navigationButtons.current[target]?.focus();
     onNavigate(routes[target].page);
   };
 
   return (
     <div className="studio-shell">
-      <header className="studio-header">
+      <aside className="studio-sidebar">
         <div className="studio-brand">
           <div className="brand-mark" aria-hidden="true">
-            <IconKeyboard size={21} stroke={1.7} />
+            <IconKeyboard size={22} stroke={1.8} />
           </div>
           <div>
-            <p className="eyebrow">AgentPad13 · Native Studio</p>
-            <h1>AgentPad13 Studio</h1>
+            <p className="brand-overline">AGENTPAD13</p>
+            <h1><span className="visually-hidden">AgentPad13 </span>Studio</h1>
           </div>
         </div>
-
-        <p className={connected ? "connection-indicator is-connected" : "connection-indicator"}>
-          <span aria-hidden="true" />
-          {connected ? "AgentPad13 conectado · Vial" : "Sin dispositivo · Vial"}
-        </p>
-
-        <div className="header-actions">
-          {changeCount > 0 ? (
-            <span className="change-indicator">{changeCount} cambios pendientes</span>
-          ) : (
-            <span className="change-indicator is-idle">Sin cambios pendientes</span>
-          )}
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Deshacer"
-            disabled={!canUndo || saving}
-            onClick={onUndo}
-          >
-            <IconArrowBackUp size={17} stroke={1.8} />
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Rehacer"
-            disabled={!canRedo || saving}
-            onClick={onRedo}
-          >
-            <IconArrowForwardUp size={17} stroke={1.8} />
-          </button>
-          <button type="button" className="primary-button header-save" disabled={saveDisabled} onClick={onSave}>
-            <IconDeviceFloppy size={17} stroke={1.8} />
-            {saving ? "Guardando…" : "Guardar en AgentPad"}
-          </button>
+        <nav aria-label="Secciones de AgentPad13 Studio" className="studio-nav">
+          {routes.map((route, index) => {
+            const Icon = route.icon;
+            const active = page === route.page;
+            return (
+              <button
+                type="button"
+                key={route.page}
+                ref={(node) => { navigationButtons.current[index] = node; }}
+                className={active ? "studio-nav-item is-active" : "studio-nav-item"}
+                aria-current={active ? "page" : undefined}
+                onClick={() => onNavigate(route.page)}
+                onKeyDown={(event) => {
+                  if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                    event.preventDefault();
+                    navigateByKeyboard(index, event.key);
+                  }
+                }}
+              >
+                <Icon size={19} stroke={1.75} />
+                <span>{route.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="sidebar-contract">
+          <span className="sidebar-contract-icon" aria-hidden="true"><IconKeyboard size={17} stroke={1.7} /></span>
+          <div>
+            <strong>Tu AgentPad13</strong>
+            <small>Vial · OAI reservado para Codex</small>
+          </div>
         </div>
-      </header>
-
+      </aside>
       <div className="studio-body">
-        <aside className="studio-sidebar">
-          <nav aria-label="Secciones de AgentPad13 Studio" className="studio-nav">
-            {routes.map((route, index) => {
-              const Icon = route.icon;
-              const active = page === route.page;
-              return (
-                <button
-                  type="button"
-                  key={route.page}
-                  className={active ? "studio-nav-item is-active" : "studio-nav-item"}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => onNavigate(route.page)}
-                  onKeyDown={(event) => {
-                    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-                      event.preventDefault();
-                      navigateByKeyboard(index, event.key);
-                    }
-                  }}
-                >
-                  <Icon size={18} stroke={1.7} />
-                  <span>{route.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-          <div className="sidebar-contract">
-            <p className="eyebrow">Contrato HID</p>
-            <p>Solo Vial · 32 bytes</p>
-            <small>OAI permanece reservado para Codex.</small>
+        <header className="studio-header">
+          <p className={connected ? "connection-indicator is-connected" : "connection-indicator"}>
+            <span aria-hidden="true" />
+            {connected ? "AgentPad13 conectado · Vial" : "Sin dispositivo · Vial"}
+          </p>
+          <div className="header-actions">
+            {changeCount > 0 ? (
+              <span className="change-indicator">{changeCount} cambios pendientes</span>
+            ) : (
+              <span className="change-indicator is-idle">Sin cambios pendientes</span>
+            )}
+            <div className="history-actions" role="group" aria-label="Historial de edición">
+              <button type="button" className="icon-button" aria-label="Deshacer" disabled={!canUndo || saving} onClick={onUndo}>
+                <IconArrowBackUp size={18} stroke={1.8} />
+              </button>
+              <button type="button" className="icon-button" aria-label="Rehacer" disabled={!canRedo || saving} onClick={onRedo}>
+                <IconArrowForwardUp size={18} stroke={1.8} />
+              </button>
+            </div>
+            <button type="button" className="primary-button header-save" disabled={saveDisabled} onClick={onSave}>
+              <IconDeviceFloppy size={18} stroke={1.8} />
+              {saving ? "Guardando…" : "Guardar en AgentPad"}
+            </button>
           </div>
-        </aside>
+        </header>
         <main className="studio-content">
           {monitor}
           {children}

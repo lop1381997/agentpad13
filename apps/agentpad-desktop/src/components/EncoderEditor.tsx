@@ -31,8 +31,8 @@ export function EncoderEditor({
 
   return (
     <section aria-labelledby="encoder-title" className="panel encoder-editor">
-      <p className="eyebrow">Rotary</p>
-      <h2 id="encoder-title">Encoder map</h2>
+      <p className="eyebrow">Control giratorio</p>
+      <h2 id="encoder-title">Acciones del encoder</h2>
       <div className="encoder-directions">
         {directions.map(({ direction, label, keycode, draft }) => (
           <button
