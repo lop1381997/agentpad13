@@ -154,7 +154,9 @@ jobs:
       - name: Run firmware host tests
         run: python3 -m unittest discover -s firmware/tests/codex_oai -p 'test_*.py'
       - name: Compile all four firmware variants
-        run: python3 firmware/tools/build_codex_oai.py --qmk-home "$QMK_HOME" --clean
+        # This is a fresh QMK checkout. Per-target --clean would erase earlier
+        # ELF files before the verifier can compare them with their UF2s.
+        run: python3 firmware/tools/build_codex_oai.py --qmk-home "$QMK_HOME"
       - name: Stage freshly compiled default and Vial variants
         run: |
           install -m 644 "$QMK_HOME/loudest_micro_default.uf2" release/firmware/prebuilt/agentpad13_reference.uf2
