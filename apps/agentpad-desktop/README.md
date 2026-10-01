@@ -140,8 +140,9 @@ For Linux account access, see [packaging/LINUX.md](packaging/LINUX.md).
 Windows now has two packaging paths: a conventional NSIS installer and a
 self-contained x64 portable ZIP with fixed WebView2 and local Data storage.
 See [packaging/WINDOWS.md](packaging/WINDOWS.md) for usage, build commands,
-runtime updates, profile migration and pending native acceptance. This source
-change has not yet produced Windows artifacts in a verified CI run.
+runtime updates, profile migration and pending native acceptance. The Windows
+installer and portable both passed the [2026-10-01 joint CI run](https://github.com/lop1381997/agentpad13/actions/runs/36853859838);
+physical Windows acceptance still remains to be done.
 
 ## Joint app and firmware downloads
 
@@ -162,6 +163,9 @@ passes. Releases also contain a combined `SHA256SUMS`. Ordinary pushes and pull
 requests create Actions artifacts but do not publish a Release. No CI step
 flashes a keyboard. macOS packages are not notarized; physical OAI/Vial and LED
 acceptance still needs the [runbook](../../docs/dual-oai-vial-physical-runbook.md).
+The same CI run passed all four build jobs and uploaded their four artifact
+groups. The GitHub Release job was intentionally skipped because the run was
+triggered by a branch push rather than a `v*` tag.
 
 ## License
 
