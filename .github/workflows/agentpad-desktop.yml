@@ -1,11 +1,11 @@
-name: AgentPad13 desktop checks
+name: AgentPad13 app and firmware
 
 on:
   push:
   pull_request:
 
 jobs:
-  test:
+  desktop:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     env:
@@ -33,7 +33,7 @@ jobs:
         run: >
           sudo apt-get update && sudo apt-get install -y
           build-essential pkg-config libudev-dev libwebkit2gtk-4.1-dev
-          libayatana-appindicator3-dev librsvg2-dev
+          libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2t64
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
       - name: Run frontend tests
@@ -43,9 +43,12 @@ jobs:
       - name: Run Rust tests
         working-directory: apps/agentpad-desktop/src-tauri
         run: cargo test
-      - name: Build debug desktop bundle
-        if: runner.os != 'Windows'
-        run: pnpm tauri build --debug
+      - name: Build macOS disk image
+        if: runner.os == 'macOS'
+        run: pnpm tauri build --bundles dmg
+      - name: Build Linux packages
+        if: runner.os == 'Linux'
+        run: pnpm tauri build --bundles deb,appimage
       - name: Build Windows installer
         if: runner.os == 'Windows'
         run: pnpm tauri build --bundles nsis
@@ -60,6 +63,19 @@ jobs:
         run: |
           $zip = Get-ChildItem output/windows/*_portable.zip
           ./scripts/test-windows-portable.ps1 -Archive $zip.FullName
+      - name: Stage Windows packages and checksums
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          $portable = @(Get-ChildItem output/windows/*_portable.zip)
+          if ($installer.Count -ne 1 -or $portable.Count -ne 1) { throw "Expected one installer and one portable" }
+          New-Item -ItemType Directory -Path output/release-windows -Force | Out-Null
+          Copy-Item $installer[0].FullName output/release-windows/
+          Copy-Item $portable[0].FullName output/release-windows/
+          Get-ChildItem output/release-windows -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content output/release-windows/SHA256SUMS -Encoding ascii
       - name: Attach Windows installer and portable
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
@@ -67,7 +83,132 @@ jobs:
           name: AgentPad13-Windows-x64
           if-no-files-found: error
           retention-days: 30
-          path: |
-            apps/agentpad-desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
-            apps/agentpad-desktop/output/windows/*.zip
-            apps/agentpad-desktop/output/windows/*.sha256
+          path: apps/agentpad-desktop/output/release-windows/*
+      - name: Stage macOS disk image and checksums
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p output/release-macos
+          cp src-tauri/target/release/bundle/dmg/*.dmg output/release-macos/
+          cd output/release-macos
+          shasum -a 256 *.dmg > SHA256SUMS
+      - name: Attach macOS disk image
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AgentPad13-macOS
+          if-no-files-found: error
+          retention-days: 30
+          path: apps/agentpad-desktop/output/release-macos/*
+      - name: Stage Linux packages and checksums
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p output/release-linux
+          cp src-tauri/target/release/bundle/deb/*.deb output/release-linux/
+          cp src-tauri/target/release/bundle/appimage/*.AppImage output/release-linux/
+          cd output/release-linux
+          sha256sum *.deb *.AppImage > SHA256SUMS
+      - name: Attach Linux packages
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AgentPad13-Linux
+          if-no-files-found: error
+          retention-days: 30
+          path: apps/agentpad-desktop/output/release-linux/*
+
+  firmware:
+    name: Firmware (all four variants)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      QMK_HOME: ${{ github.workspace }}/../vial-qmk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install firmware host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make git libhidapi-dev libusb-1.0-0-dev
+      - name: Check out pinned Vial QMK and submodules
+        run: |
+          git clone --branch vial --single-branch --filter=blob:none https://github.com/vial-kb/vial-qmk.git "$QMK_HOME"
+          git -C "$QMK_HOME" checkout 00fc4627cd038ac9b7e9b8bf2b40b50e9e88aecb
+          git -C "$QMK_HOME" submodule update --init --recursive
+      - name: Install pinned QMK CLI
+        run: python3 -m pip install 'qmk==1.2.0' -r "$QMK_HOME/requirements.txt"
+      - name: Install pinned Arm GNU Toolchain
+        run: |
+          archive="$RUNNER_TEMP/arm-gnu-toolchain.tar.xz"
+          curl --fail --location --retry 3 --output "$archive" https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz
+          echo "597893282ac8c6ab1a4073977f2362990184599643b4c5ee34870a8215783a16  $archive" | sha256sum --check
+          tar -xJf "$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin" >> "$GITHUB_PATH"
+      - name: Install pinned emulator dependencies
+        working-directory: firmware/tests/emulator
+        run: npm ci
+      - name: Run firmware host tests
+        run: python3 -m unittest discover -s firmware/tests/codex_oai -p 'test_*.py'
+      - name: Compile all four firmware variants
+        run: python3 firmware/tools/build_codex_oai.py --qmk-home "$QMK_HOME" --clean
+      - name: Stage freshly compiled default and Vial variants
+        run: |
+          install -m 644 "$QMK_HOME/loudest_micro_default.uf2" release/firmware/prebuilt/agentpad13_reference.uf2
+          install -m 644 "$QMK_HOME/loudest_micro_vial.uf2" release/firmware/prebuilt/agentpad13.uf2
+          cmp "$QMK_HOME/loudest_micro_codex_oai.uf2" release/firmware/prebuilt/agentpad13_codex_oai.uf2
+          cmp "$QMK_HOME/loudest_micro_vial_oai.uf2" release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2
+      - name: Boot all four variants in the RP2040 emulator
+        working-directory: firmware/tests/emulator
+        run: |
+          npm run smoke:default
+          npm run smoke:vial
+          npm run smoke:codex-oai
+          npm run smoke:dual-oai-vial
+      - name: Verify Direct OAI and dual OAI/Vial artifacts
+        run: |
+          python3 firmware/tools/verify_codex_oai_artifact.py --profile direct --uf2 release/firmware/prebuilt/agentpad13_codex_oai.uf2 --elf "$QMK_HOME/.build/loudest_micro_codex_oai.elf" --emulator-evidence firmware/evidence/codex-oai-emulator.json --output firmware/evidence/codex-oai-current-manifest.json
+          python3 firmware/tools/verify_codex_oai_artifact.py --profile dual --uf2 release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2 --elf "$QMK_HOME/.build/loudest_micro_vial_oai.elf" --emulator-evidence firmware/evidence/dual-oai-vial-emulator.json --output firmware/evidence/dual-oai-vial-current-manifest.json
+      - name: Collect only current firmware builds
+        run: |
+          mkdir -p output/firmware
+          install -m 644 release/firmware/prebuilt/agentpad13_reference.uf2 output/firmware/
+          install -m 644 release/firmware/prebuilt/agentpad13.uf2 output/firmware/
+          install -m 644 release/firmware/prebuilt/agentpad13_codex_oai.uf2 output/firmware/
+          install -m 644 release/firmware/prebuilt/agentpad13_oai_vial_dual.uf2 output/firmware/
+          install -m 644 release/firmware/prebuilt/agentpad13_oai_vial_dual.vial output/firmware/
+          cd output/firmware
+          sha256sum *.uf2 *.vial > SHA256SUMS
+      - name: Attach all four firmware variants and Vial definition
+        uses: actions/upload-artifact@v4
+        with:
+          name: AgentPad13-Firmware
+          if-no-files-found: error
+          retention-days: 30
+          path: output/firmware/*
+
+  release:
+    name: Publish joint app and firmware release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop, firmware]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: AgentPad13-*
+          path: ${{ runner.temp }}/downloads
+      - name: Require a complete matching release and generate checksums
+        run: |
+          python3 tools/prepare_release_assets.py "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/release" "$GITHUB_REF_NAME"
+          cd "$RUNNER_TEMP/release"
+          sha256sum --check SHA256SUMS
+      - name: Publish one GitHub Release with all assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/release/* --verify-tag --title "AgentPad13 $GITHUB_REF_NAME" --generate-notes

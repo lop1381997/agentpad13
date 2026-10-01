@@ -47,13 +47,19 @@ describe("AgentPad13 packaging contract", () => {
     expect(rule).toContain('ATTRS{idProduct}=="8360"');
   });
 
-  it("keeps CI local, non-publishing, and free of physical-HID execution", () => {
+  it("builds app and firmware together and publishes only verified version tags", () => {
     const workflow = readFromRepository(".github/workflows/agentpad-desktop.yml");
 
     expect(workflow).toContain("pnpm install --frozen-lockfile");
     expect(workflow).toContain("pnpm test --run");
     expect(workflow).toContain("cargo test");
-    expect(workflow).toContain("pnpm tauri build --debug");
-    expect(workflow.toLowerCase()).not.toMatch(/gh release|tauri-action|qmk flash|bootloader|hidapi::hidapi::new/);
+    expect(workflow).toContain("pnpm tauri build --bundles nsis");
+    expect(workflow).toContain("pnpm tauri build --bundles dmg");
+    expect(workflow).toContain("pnpm tauri build --bundles deb,appimage");
+    expect(workflow).toContain("firmware/tools/build_codex_oai.py");
+    expect(workflow).toContain("tools/prepare_release_assets.py");
+    expect(workflow).toContain("gh release create");
+    expect(workflow).toContain("refs/tags/v");
+    expect(workflow.toLowerCase()).not.toMatch(/qmk flash|hidapi::hidapi::new/);
   });
 });

@@ -143,6 +143,26 @@ See [packaging/WINDOWS.md](packaging/WINDOWS.md) for usage, build commands,
 runtime updates, profile migration and pending native acceptance. This source
 change has not yet produced Windows artifacts in a verified CI run.
 
+## Joint app and firmware downloads
+
+The `AgentPad13 app and firmware` workflow builds the Windows installer and
+portable ZIP, macOS DMG, Linux DEB and AppImage, and all four firmware targets
+from the same commit. Open its successful GitHub Actions run and download the
+`AgentPad13-Windows-x64`, `AgentPad13-macOS`, `AgentPad13-Linux` and
+`AgentPad13-Firmware` artifacts. Each includes a `SHA256SUMS` file. The firmware
+artifact contains `agentpad13_reference.uf2` (plain QMK), `agentpad13.uf2`
+(Vial), `agentpad13_codex_oai.uf2` (Direct OAI), and
+`agentpad13_oai_vial_dual.uf2` plus its `.vial` definition (recommended for
+this app). Only the current run's compiled UF2s are collected; an older
+checked-in alias is not distributed.
+
+Pushing a version tag such as `v0.1.0` creates one GitHub Release with the same
+app and firmware builds, provided every platform build and firmware check
+passes. Releases also contain a combined `SHA256SUMS`. Ordinary pushes and pull
+requests create Actions artifacts but do not publish a Release. No CI step
+flashes a keyboard. macOS packages are not notarized; physical OAI/Vial and LED
+acceptance still needs the [runbook](../../docs/dual-oai-vial-physical-runbook.md).
+
 ## License
 
 GPL-2.0-or-later. The full GPL version 2 text is in [COPYING](COPYING).
