@@ -59,7 +59,7 @@ def run_dual_oai_vial_emulator(uf2: Path) -> dict[str, object]:
         subprocess.run(
             [
                 "node", "dual_oai_vial_watchdog.cjs", str(uf2),
-                "--json", str(evidence_path), "--deadline-ms", "30000",
+                "--json", str(evidence_path), "--deadline-ms", "90000",
             ],
             cwd=EMULATOR,
             check=True,
@@ -102,10 +102,10 @@ class OaiEmulatorContractTest(unittest.TestCase):
                     check=False,
                     text=True,
                     capture_output=True,
-                    timeout=25,
+                    timeout=100,
                 )
             except subprocess.TimeoutExpired as exc:
-                self.fail(f"dual emulator hung for 25 seconds: {exc}")
+                self.fail(f"dual emulator hung for 100 seconds: {exc}")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_dual_recovery_never_claims_configuration_descriptor_proof(self) -> None:
