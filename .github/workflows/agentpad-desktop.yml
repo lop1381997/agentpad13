@@ -201,16 +201,29 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Gate publish to matching desktop version tags
+        id: release_gate
+        run: |
+          expected_tag="$(python3 -c "import json; from pathlib import Path; app_root = Path('apps/agentpad-desktop'); package_version = json.loads((app_root / 'package.json').read_text(encoding='utf-8'))['version']; native_version = json.loads((app_root / 'src-tauri' / 'tauri.conf.json').read_text(encoding='utf-8'))['version']; print(f'v{package_version}') if package_version == native_version else (_ for _ in ()).throw(SystemExit(f'desktop package version {package_version} does not match native version {native_version}'))")"
+          if [[ "$GITHUB_REF_NAME" == "$expected_tag" ]]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping publish for tag '$GITHUB_REF_NAME'; expected '$expected_tag'."
+          fi
       - uses: actions/download-artifact@v4
+        if: steps.release_gate.outputs.should_release == 'true'
         with:
           pattern: AgentPad13-*
           path: ${{ runner.temp }}/downloads
       - name: Require a complete matching release and generate checksums
+        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           python3 tools/prepare_release_assets.py "$RUNNER_TEMP/downloads" "$RUNNER_TEMP/release" "$GITHUB_REF_NAME"
           cd "$RUNNER_TEMP/release"
           sha256sum --check SHA256SUMS
       - name: Publish one GitHub Release with all assets
+        if: steps.release_gate.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/release/* --verify-tag --title "AgentPad13 $GITHUB_REF_NAME" --generate-notes
